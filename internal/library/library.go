@@ -29,6 +29,46 @@ type Library struct {
 	Catalogue func() []brands.Brand
 	Font      string
 	mu        sync.Mutex
+	extraMu   sync.RWMutex
+	extra     map[string]brands.Brand
+}
+
+// AddBrand registers a runtime brand so its slates can be rendered.
+func (l *Library) AddBrand(b brands.Brand) {
+	l.extraMu.Lock()
+	defer l.extraMu.Unlock()
+	if l.extra == nil {
+		l.extra = map[string]brands.Brand{}
+	}
+	l.extra[b.ID] = b
+}
+
+func (l *Library) allBrands() []brands.Brand {
+	out := append([]brands.Brand(nil), l.Catalogue()...)
+	l.extraMu.RLock()
+	defer l.extraMu.RUnlock()
+	for _, b := range l.extra {
+		out = append(out, b)
+	}
+	return out
+}
+
+var trialName = regexp.MustCompile(`^trial_[0-9a-f]{12}$`)
+
+// Trial loads a try-a-brand result for an episode.
+func (l *Library) Trial(id, name string) (pipeline.Result, error) {
+	var r pipeline.Result
+	if !safeID.MatchString(id) || !trialName.MatchString(name) {
+		return r, ErrNotFound
+	}
+	b, err := os.ReadFile(filepath.Join(l.DataDir, id, name+".json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return r, ErrNotFound
+	}
+	if err != nil {
+		return r, err
+	}
+	return r, json.Unmarshal(b, &r)
 }
 
 type Summary struct {
@@ -93,7 +133,7 @@ func (l *Library) SlatePath(ctx context.Context, creativeID string) (string, err
 	if !safeID.MatchString(creativeID) {
 		return "", ErrNotFound
 	}
-	for _, b := range l.Catalogue() {
+	for _, b := range l.allBrands() {
 		for _, c := range b.Creatives {
 			if c.ID != creativeID {
 				continue

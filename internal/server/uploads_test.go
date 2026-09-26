@@ -27,7 +27,10 @@ func TestLocalUploadFinalizeAndJob(t *testing.T) {
 		t.Fatalf("ffmpeg: %v %s", err, b)
 	}
 	ran := make(chan string, 1)
-	runner := jobs.NewRunner(jobs.NewBus(), func(_ context.Context, ep string, _ func(string, string)) error { ran <- ep; return nil })
+	runner := jobs.NewRunner(jobs.NewBus(), func(_ context.Context, j jobs.Job, _ func(string, string)) (string, error) {
+		ran <- j.Episode
+		return "", nil
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	runner.Start(ctx, 2)

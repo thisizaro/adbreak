@@ -65,3 +65,6 @@ tr.rej { color: var(--muted); }
 .chip { display: inline-block; padding: 2px 8px; margin: 4px 6px 0 0; border-radius: 999px; font-size: 12px; }
 .chip.ok { background: #1d3325; color: #9fe0b2; }
 .chip.bad { background: #3d1f1a; color: #ffb4a3; }
+.trybrand textarea { width: 100%; box-sizing: border-box; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-family: ui-monospace, monospace; font-size: 13px; margin-bottom: 8px; }
+.trialbar { background: #2b2412; border: 1px solid #5a4a1a; border-radius: 8px; padding: 8px 12px; }
+.trialbar button { margin-left: 8px; }

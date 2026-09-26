@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -53,17 +55,36 @@ func main() {
 	if p := factory.Project(); p != "" {
 		log.Printf("vertex project: %s", p)
 	}
-	runner := jobs.NewRunner(jobs.NewBus(), func(ctx context.Context, id string, progress func(stage, msg string)) error {
-		video, err := lib.VideoPath(id)
+	runner := jobs.NewRunner(jobs.NewBus(), func(ctx context.Context, j jobs.Job, progress func(stage, msg string)) (string, error) {
+		video, err := lib.VideoPath(j.Episode)
 		if err != nil {
-			return err
+			return "", err
 		}
-		ep := pipeline.Episode{ID: id, Video: video, Dir: filepath.Join(cfg.DataDir, id)}
+		ep := pipeline.Episode{ID: j.Episode, Video: video, Dir: filepath.Join(cfg.DataDir, j.Episode)}
 		if err := os.MkdirAll(ep.Dir, 0o755); err != nil {
-			return err
+			return "", err
 		}
-		_, err = factory.Deps(progress).Run(ctx, ep, catalogue, cfg.PipelinePacing())
-		return err
+		d := factory.Deps(progress)
+		switch j.Kind {
+		case "try-brand":
+			var req struct {
+				Brand brands.Brand `json:"brand"`
+				Trial string       `json:"trial"`
+			}
+			if err := json.Unmarshal(j.Payload, &req); err != nil {
+				return "", err
+			}
+			base, err := lib.Result(j.Episode)
+			if err != nil {
+				return "", err
+			}
+			progress("brands", fmt.Sprintf("re-placing %d breaks with %s added to %d brands", len(base.Breaks)+len(base.Unplaced), req.Brand.ID, len(catalogue)))
+			_, err = d.Rematch(ctx, ep, base, append(append([]brands.Brand(nil), catalogue...), req.Brand), req.Trial)
+			return req.Trial, err
+		default:
+			_, err = d.Run(ctx, ep, catalogue, cfg.PipelinePacing())
+			return "", err
+		}
 	})
 	runner.PerDay = cfg.JobsPerDay
 	runner.Start(ctx, 8)

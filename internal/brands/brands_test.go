@@ -74,3 +74,22 @@ func TestIndependentFlagBlocksEvenWhenPlacementModelSaysNo(t *testing.T) {
 		t.Fatalf("%+v", d)
 	}
 }
+
+func TestValidate(t *testing.T) {
+	ok := Brand{ID: "brand_i", Name: "Brand I", Target: []string{"books"}, Negative: []string{"violence"},
+		Creatives: []Creative{{ID: "i_20s_bn", Seconds: 20}}}
+	if err := ok.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	bad := []Brand{
+		{ID: "../x", Name: "x", Target: []string{"a"}, Creatives: ok.Creatives},
+		{ID: "b", Name: "", Target: []string{"a"}, Creatives: ok.Creatives},
+		{ID: "bb", Name: "B", Target: nil, Creatives: ok.Creatives},
+		{ID: "bb", Name: "B", Target: []string{"a"}, Creatives: []Creative{{ID: "c", Seconds: 999}}},
+	}
+	for i, b := range bad {
+		if b.Validate() == nil {
+			t.Errorf("case %d should fail", i)
+		}
+	}
+}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Player, { type PlayerHandle } from './Player'
 import Upload from './Upload'
+import TryBrand from './TryBrand'
 import { fmt, getEpisode, listEpisodes, loadVMAP, type AdSlot, type Result, type Summary } from './api'
 
 function useRoute() {
@@ -80,15 +81,25 @@ function Library({ open }: { open: (id: string) => void }) {
 }
 
 function Episode({ id }: { id: string }) {
-  const [res, setRes] = useState<Result | null>(null)
+  const [base, setBase] = useState<Result | null>(null)
+  const [trial, setTrial] = useState<{ res: Result; name: string } | null>(null)
   const [slots, setSlots] = useState<AdSlot[]>([])
   const [err, setErr] = useState('')
   const player = useRef<PlayerHandle>(null)
   useEffect(() => {
     Promise.all([getEpisode(id), loadVMAP(id)])
-      .then(([r, s]) => (setRes(r), setSlots(s)))
+      .then(([r, s]) => (setBase(r), setSlots(s)))
       .catch((e) => setErr(String(e)))
   }, [id])
+  const res = trial ? trial.res : base
+  async function showTrial(r: Result, name: string) {
+    setTrial({ res: r, name })
+    setSlots(await loadVMAP(id, name))
+  }
+  async function showBase() {
+    setTrial(null)
+    setSlots(await loadVMAP(id))
+  }
   if (err) return <p className="err">{err}</p>
   if (!res) return <p>Loading…</p>
   const f = res.funnel
@@ -99,6 +110,11 @@ function Episode({ id }: { id: string }) {
       <p className="muted">
         pipeline v{res.pipeline_version} · {res.asr_provider} · {res.ai_provider} · computed {res.computed_at}
       </p>
+      {trial && (
+        <p className="trialbar">
+          Showing re-match with a runtime brand ({trial.name}). <button onClick={showBase}>Back to original catalogue</button>
+        </p>
+      )}
       <Player ref={player} src={`/media/episodes/${id}.mp4`} slots={slots} duration={res.media.duration} sceneStarts={(res.scenes ?? []).slice(1).map((s) => s.start)} />
       <p className="legend"><i className="lg-scene" /> scene boundary <i className="lg-break" /> ad break</p>
 
@@ -232,8 +248,10 @@ function Episode({ id }: { id: string }) {
         </table>
       </section>
 
+      <TryBrand id={id} onResult={showTrial} />
+
       <section className="downloads">
-        <a href={`/api/episodes/${id}/vmap.xml`} target="_blank">VMAP manifest</a>
+        <a href={`/api/episodes/${id}/vmap.xml${trial ? `?trial=${trial.name}` : ''}`} target="_blank">VMAP manifest</a>
         <a href={`/api/episodes/${id}`} target="_blank">debug JSON</a>
       </section>
     </main>
