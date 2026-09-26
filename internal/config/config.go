@@ -47,6 +47,8 @@ type Config struct {
 	BrandsPath  string
 	SlateFont   string
 	MaxUploadMB int
+	UploadTo    string
+	UploadPfx   string
 	MaxUploadS  float64
 	Pacing      Pacing
 }
@@ -75,6 +77,8 @@ func Load() (Config, error) {
 		BrandsPath:  str("BRANDS_PATH", "assets/brands.json"),
 		SlateFont:   str("SLATE_FONT", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
 		MaxUploadMB: integer("MAX_UPLOAD_MB", 700, &errs),
+		UploadTo:    str("UPLOAD_TARGET", "local"),
+		UploadPfx:   str("GCS_UPLOAD_PREFIX", "videos/"),
 		MaxUploadS:  float("MAX_UPLOAD_SECONDS", 3600, &errs),
 		Pacing: Pacing{
 			MaxBreaksPerHour: integer("PACING_MAX_BREAKS_PER_HOUR", 6, &errs),
@@ -86,6 +90,9 @@ func Load() (Config, error) {
 			PodSeconds:       float("PACING_POD_SECONDS", 30, &errs),
 			MinScore:         float("PACING_MIN_SCORE", 0.35, &errs),
 		},
+	}
+	if c.UploadTo != "local" && !(c.UploadTo == "gcs" && c.GCSBucket != "") {
+		errs = append(errs, fmt.Errorf("UPLOAD_TARGET=%q: want local, or gcs with GCS_BUCKET set", c.UploadTo))
 	}
 	if c.AIBackend != "vertex" && c.AIBackend != "studio" {
 		errs = append(errs, fmt.Errorf("AI_BACKEND=%q: want vertex or studio", c.AIBackend))
@@ -116,7 +123,7 @@ func (c Config) PipelinePacing() pipeline.Pacing {
 func (c Config) Print(w io.Writer) {
 	fmt.Fprintln(w, "effective config:")
 	fmt.Fprintf(w, "  port=%s version=%s\n", c.Port, c.Version)
-	fmt.Fprintf(w, "  database_url=%s gcs_bucket=%q\n", secret(c.DatabaseURL), c.GCSBucket)
+	fmt.Fprintf(w, "  upload_target=%s gcs_bucket=%q gcs_upload_prefix=%s\n", c.UploadTo, c.GCSBucket, c.UploadPfx)
 	fmt.Fprintf(w, "  data_dir=%s video_dir=%s brands=%s slate_font=%s\n", c.DataDir, c.VideoDir, c.BrandsPath, c.SlateFont)
 	fmt.Fprintf(w, "  budget guard: max_upload_mb=%d max_upload_seconds=%.0f jobs_per_day=%d job_token_cap=%d one job at a time\n", c.MaxUploadMB, c.MaxUploadS, c.JobsPerDay, c.JobTokens)
 	fmt.Fprintf(w, "  ai_backend=%s gcp_project=%q vertex_location=%s gemini_api_key=%s\n", c.AIBackend, c.GCPProject, c.VertexLoc, secret(c.GeminiKey))

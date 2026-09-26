@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/oauth2/google"
+
 	"github.com/thisizaro/adbreak/internal/app"
 	"github.com/thisizaro/adbreak/internal/brands"
 	"github.com/thisizaro/adbreak/internal/config"
@@ -66,8 +68,16 @@ func main() {
 	runner.PerDay = cfg.JobsPerDay
 	runner.Start(ctx, 8)
 
+	var target server.UploadTarget = server.LocalTarget{}
+	if cfg.UploadTo == "gcs" {
+		ts, err := google.DefaultTokenSource(ctx, "https://www.googleapis.com/auth/devstorage.read_write")
+		if err != nil {
+			log.Fatal(err)
+		}
+		target = server.GCSTarget{Bucket: cfg.GCSBucket, Prefix: cfg.UploadPfx, Tokens: ts}
+	}
 	handler := server.New(cfg.Version, static, lib, cfg.PipelinePacing()).WithUploads(&server.Uploads{
-		VideoDir: cfg.VideoDir, MaxBytes: int64(cfg.MaxUploadMB) << 20, MaxDuration: cfg.MaxUploadS, Runner: runner,
+		Target: target, VideoDir: cfg.VideoDir, MaxBytes: int64(cfg.MaxUploadMB) << 20, MaxDuration: cfg.MaxUploadS, Runner: runner,
 	}).Handler()
 
 	srv := &http.Server{

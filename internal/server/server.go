@@ -43,6 +43,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/episodes/{id}/vmap.xml", s.vmap)
 	mux.HandleFunc("POST /api/uploads", s.createUpload)
 	mux.HandleFunc("PUT /api/uploads/{id}", s.putUpload)
+	mux.HandleFunc("POST /api/uploads/{id}/finalize", s.finalizeUpload)
 	mux.HandleFunc("POST /api/jobs", s.createJob)
 	mux.HandleFunc("GET /api/jobs/{id}", s.getJob)
 	mux.HandleFunc("GET /api/impression", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
@@ -115,7 +116,7 @@ func (s *Server) video(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	http.ServeFile(w, r, p)
+	serveChunked(w, r, p)
 }
 
 func (s *Server) slate(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +125,7 @@ func (s *Server) slate(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	http.ServeFile(w, r, p)
+	serveChunked(w, r, p)
 }
 
 func trimExt(name, ext string) string {
