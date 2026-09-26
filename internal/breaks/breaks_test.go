@@ -60,3 +60,15 @@ func TestMaxBreaks(t *testing.T) {
 		}
 	}
 }
+
+func TestApplySceneContext(t *testing.T) {
+	cands := []Candidate{{T: 110, Score: 0.9}, {T: 500, Score: 0.9}, {T: 600, Score: 0.9, Rejected: RejectSpeech}}
+	got := ApplySceneContext(cands, []float64{100, 480})
+	if got[0].Score != 1 || got[1].Score < 0.99 || got[2].Score != 0.9 {
+		t.Fatalf("near-boundary scores wrong: %+v", got)
+	}
+	got = ApplySceneContext([]Candidate{{T: 300, Score: 0.5}}, []float64{100})
+	if got[0].Score != 0.3 || got[0].Signals[0] != "mid_scene" {
+		t.Fatalf("mid-scene: %+v", got)
+	}
+}

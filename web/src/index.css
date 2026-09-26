@@ -51,3 +51,8 @@ tr.rej { color: var(--muted); }
 .downloads { display: flex; gap: 16px; margin-top: 24px; }
 .downloads a { color: var(--accent); }
 @media (max-width: 640px) { .scenes { grid-template-columns: 1fr; } }
+.scenetick { position: absolute; top: 0; width: 2px; height: 10px; background: #6d7a96; transform: translateX(-1px); }
+.legend { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: -1px; }
+.lg-scene { background: #6d7a96; }
+.lg-break { background: var(--accent); }

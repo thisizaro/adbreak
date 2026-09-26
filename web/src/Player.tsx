@@ -3,11 +3,11 @@ import { fmt, type AdSlot } from './api'
 
 export type PlayerHandle = { seek: (t: number) => void }
 
-type Props = { src: string; slots: AdSlot[]; duration: number }
+type Props = { src: string; slots: AdSlot[]; duration: number; sceneStarts: number[] }
 
 // Plays the episode and, when playback crosses a VMAP break, pauses content,
 // plays the ad creative, then resumes content at the break point.
-const Player = forwardRef<PlayerHandle, Props>(function Player({ src, slots, duration }, ref) {
+const Player = forwardRef<PlayerHandle, Props>(function Player({ src, slots, duration, sceneStarts }, ref) {
   const content = useRef<HTMLVideoElement>(null)
   const ad = useRef<HTMLVideoElement>(null)
   const played = useRef<Set<string>>(new Set())
@@ -80,6 +80,9 @@ const Player = forwardRef<PlayerHandle, Props>(function Player({ src, slots, dur
       </div>
       <div className="track">
         <div className="progress" style={{ width: `${(now / duration) * 100}%` }} />
+        {sceneStarts.map((t) => (
+          <div key={t} className="scenetick" style={{ left: `${(t / duration) * 100}%` }} />
+        ))}
         {slots.map((s) => (
           <div key={s.breakId} className="marker" style={{ left: `${(s.offset / duration) * 100}%` }} title={`${s.title} at ${fmt(s.offset)}`} />
         ))}

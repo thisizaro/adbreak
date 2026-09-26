@@ -10,6 +10,7 @@ import (
 	"github.com/thisizaro/adbreak/internal/brands"
 	"github.com/thisizaro/adbreak/internal/breaks"
 	"github.com/thisizaro/adbreak/internal/media"
+	"github.com/thisizaro/adbreak/internal/scenes"
 )
 
 // Version is stamped on every result so the UI can show which pipeline produced it.
@@ -28,6 +29,7 @@ type Pacing struct {
 
 type Funnel struct {
 	Shots          int `json:"shots"`
+	Scenes         int `json:"scenes"`
 	Candidates     int `json:"candidates"`
 	PassHardFilter int `json:"pass_hard_filters"`
 	PassAIJudge    int `json:"pass_ai_speech_check"`
@@ -51,6 +53,7 @@ type Result struct {
 	Version     string             `json:"pipeline_version"`
 	ComputedAt  time.Time          `json:"computed_at"`
 	Media       media.Info         `json:"media"`
+	Scenes      []scenes.Scene     `json:"scenes"`
 	Pacing      Pacing             `json:"pacing"`
 	Funnel      Funnel             `json:"funnel"`
 	Breaks      []Break            `json:"breaks"`
@@ -72,6 +75,12 @@ func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p P
 	r := Result{Episode: ep.ID, Version: Version, ComputedAt: time.Now().UTC(), Media: m.Info, Pacing: p,
 		ASRProvider: d.ASR.Name(), AIProvider: d.AI.Name()}
 	r.Funnel.Shots = len(m.Shots) + 1
+	sc, err := d.Scenes(ctx, ep, m, tr)
+	if err != nil {
+		return Result{}, err
+	}
+	r.Scenes = sc
+	r.Funnel.Scenes = len(sc)
 
 	var cands []breaks.Candidate
 	for _, t := range m.Shots {
@@ -88,6 +97,11 @@ func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p P
 		return Result{}, err
 	}
 	r.Funnel.PassAIJudge = countLive(cands)
+	var sceneStarts []float64
+	for _, s := range sc[1:] {
+		sceneStarts = append(sceneStarts, s.Start)
+	}
+	cands = breaks.ApplySceneContext(cands, sceneStarts)
 
 	budget := breaks.MaxBreaks(m.Info.Duration, p.MaxBreaksPerHour, p.MaxAdLoadPct, p.PodSeconds)
 	r.Funnel.BreakBudget = budget

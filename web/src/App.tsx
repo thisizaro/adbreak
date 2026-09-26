@@ -49,7 +49,7 @@ function Library({ open }: { open: (id: string) => void }) {
             <strong>{e.id.replaceAll('_', ' ')}</strong>
             <span>{fmt(e.duration)} · {e.breaks} break{e.breaks === 1 ? '' : 's'}</span>
             <small>
-              {e.funnel.shots} shots → {e.funnel.pass_hard_filters} past speech guard → {e.funnel.pass_ai_speech_check} past AI check → {e.funnel.placed} placed
+              {e.funnel.shots} shots → {e.funnel.scenes} scenes → {e.funnel.pass_hard_filters} past speech guard → {e.funnel.pass_ai_speech_check} past AI check → {e.funnel.placed} placed
             </small>
             <small className="muted">computed by pipeline v{e.pipeline_version} at {e.computed_at}</small>
           </button>
@@ -79,13 +79,15 @@ function Episode({ id }: { id: string }) {
       <p className="muted">
         pipeline v{res.pipeline_version} · {res.asr_provider} · {res.ai_provider} · computed {res.computed_at}
       </p>
-      <Player ref={player} src={`/media/episodes/${id}.mp4`} slots={slots} duration={res.media.duration} />
+      <Player ref={player} src={`/media/episodes/${id}.mp4`} slots={slots} duration={res.media.duration} sceneStarts={(res.scenes ?? []).slice(1).map((s) => s.start)} />
+      <p className="legend"><i className="lg-scene" /> scene boundary <i className="lg-break" /> ad break</p>
 
       <section>
         <h3>Funnel</h3>
         <div className="funnel">
           {[
-            ['shot cuts', f.candidates],
+            ['shots', f.shots],
+            ['scenes', f.scenes],
             ['pass head/tail + speech guard', f.pass_hard_filters],
             ['pass AI speech check', f.pass_ai_speech_check],
             [`selected (budget ${f.break_budget})`, f.selected],
@@ -136,6 +138,32 @@ function Episode({ id }: { id: string }) {
             )}
           </div>
         ))}
+      </section>
+
+      <section>
+        <h3>Scenes ({(res.scenes ?? []).length})</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>start</th>
+              <th>length</th>
+              <th>activity</th>
+              <th>description</th>
+              <th>contexts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(res.scenes ?? []).map((s) => (
+              <tr key={s.index} onClick={() => player.current?.seek(s.start)}>
+                <td>{fmt(s.start)}</td>
+                <td>{fmt(s.end - s.start)}</td>
+                <td>{s.dominant_activity}</td>
+                <td>{s.description}</td>
+                <td className="muted">{(s.contexts ?? []).join(', ')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       <section>

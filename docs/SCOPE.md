@@ -70,7 +70,7 @@ Vertical slice target: 16:00 to 16:30 IST. Feature freeze: 23:00 IST. Submit by 
 ### 0. Setup
 - [x] 0.1 Repo, Go module, layout, docs folder
 - [x] 0.2 Postgres (Docker), ffmpeg (static), assets downloaded and probed, API keys verified
-- [ ] 0.3 Public GitHub repo, first push
+- [x] 0.3 Public GitHub repo, first push
 - [ ] 0.4 GCP project, bucket, budget alert, gcloud auth (with Aranya)
 
 ### 1. Docs
@@ -86,18 +86,18 @@ Vertical slice target: 16:00 to 16:30 IST. Feature freeze: 23:00 IST. Submit by 
 - [ ] 2.5 Dockerfile (debian-slim + ffmpeg + fonts), deploy skeleton
 
 ### 3. Vertical slice
-- [ ] 3.1 Probe + shot detection
-- [ ] 3.2 Groq Whisper, chunked, word + segment timestamps
-- [ ] 3.3 Candidates at shot boundaries + speech guard (segment spans + margin)
-- [ ] 3.4 Pacing DP
-- [ ] 3.5 Brand pick with per-brand negative block
-- [ ] 3.6 Ad slate generator (15/20/30s)
-- [ ] 3.7 VMAP + VAST + debug JSON
-- [ ] 3.8 Player: seek before break, cut to slate, resume
+- [x] 3.1 Probe + shot detection
+- [x] 3.2 Groq Whisper, chunked, word + segment timestamps
+- [x] 3.3 Candidates at shot boundaries + speech guard (segment spans + margin)
+- [x] 3.4 Pacing DP
+- [x] 3.5 Brand pick with per-brand negative block
+- [x] 3.6 Ad slate generator (15/20/30s)
+- [x] 3.7 VMAP + VAST + debug JSON
+- [x] 3.8 Player: seek before break, cut to slate, resume
 
 ### 4. Depth
-- [ ] 4.1 Scene segmentation: histogram + transcript propose, AI describes and refines
-- [ ] 4.2 Scene list view + scenes in debug JSON
+- [x] 4.1 Scene segmentation: histogram + transcript propose, AI describes and refines
+- [x] 4.2 Scene list view + scenes in debug JSON
 - [ ] 4.3 Gemini audio check on surviving candidates (second speech signal)
 - [ ] 4.4 AI break scoring with rationale
 - [ ] 4.5 Semantic per-brand negative check on scenes before and after, uncertain = blocked; ranking with rationale
@@ -109,16 +109,16 @@ Vertical slice target: 16:00 to 16:30 IST. Feature freeze: 23:00 IST. Submit by 
 - [ ] 4.11 Precompute all 6 episodes on the deployed instance
 
 ### 5. Tests (alongside the code)
-- [ ] 5.1 Speech guard
-- [ ] 5.2 Pacing DP
-- [ ] 5.3 Negative filter (never passes, uncertain blocks, both scenes checked)
-- [ ] 5.4 9th brand fixture
-- [ ] 5.5 VMAP/VAST well-formed, durations match
-- [ ] 5.6 Whisper chunk merge
+- [x] 5.1 Speech guard
+- [x] 5.2 Pacing DP
+- [x] 5.3 Negative filter (never passes, uncertain blocks, both scenes checked)
+- [x] 5.4 9th brand fixture
+- [x] 5.5 VMAP/VAST well-formed, durations match
+- [x] 5.6 Whisper chunk merge
 - [ ] 5.7 End-to-end smoke on a short clip with recorded AI responses
 
 ### 6. CI
-- [ ] 6.1 GitHub Actions: go vet, go test, web build (parallel jobs) on push and PR
+- [x] 6.1 GitHub Actions: go vet, go test, web build (parallel jobs) on push and PR
 
 ### 7. Validation checkpoints (other chat)
 - [ ] 7.1 SCOPE  - [ ] 7.2 after slice  - [ ] 7.3 brand matching  - [ ] 7.4 cut list ~21:30

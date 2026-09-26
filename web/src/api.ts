@@ -1,5 +1,6 @@
 export type Funnel = {
   shots: number
+  scenes: number
   candidates: number
   pass_hard_filters: number
   pass_ai_speech_check: number
@@ -42,6 +43,19 @@ export type Placement = {
   }
 }
 
+export type Scene = {
+  index: number
+  start: number
+  end: number
+  first_shot: number
+  last_shot: number
+  description: string
+  dominant_activity: string
+  contexts: string[] | null
+  mood: string
+  source: string
+}
+
 export type Candidate = { t: number; score: number; signals?: string[]; rejected?: string; rationale?: string }
 
 export type Break = {
@@ -58,6 +72,7 @@ export type Result = {
   pipeline_version: string
   computed_at: string
   media: { duration: number; width: number; height: number; fps: number }
+  scenes: Scene[] | null
   pacing: Record<string, number>
   funnel: Funnel
   breaks: Break[] | null

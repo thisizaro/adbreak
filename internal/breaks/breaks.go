@@ -116,3 +116,34 @@ func Select(cands []Candidate, l Limits) []int {
 	sort.Slice(picked, func(a, b int) bool { return cands[picked[a]].T < cands[picked[b]].T })
 	return picked
 }
+
+// SceneWindow is how far a cut may sit from a scene boundary and still count as
+// breaking "at" it: narration often runs over the exact transition, so the
+// nearest clean pause is usually a few seconds either side.
+var SceneWindow = struct{ Before, After float64 }{15, 20}
+
+// ApplySceneContext prefers cuts near scene boundaries: +0.1 near one, x0.6 mid-scene.
+// Rejected candidates are left untouched.
+func ApplySceneContext(cands []Candidate, sceneStarts []float64) []Candidate {
+	out := append([]Candidate(nil), cands...)
+	for i := range out {
+		if out[i].Rejected != "" {
+			continue
+		}
+		near := false
+		for _, b := range sceneStarts {
+			if out[i].T >= b-SceneWindow.Before && out[i].T <= b+SceneWindow.After {
+				near = true
+				break
+			}
+		}
+		if near {
+			out[i].Score = math.Min(1, out[i].Score+0.1)
+			out[i].Signals = append(out[i].Signals, "near_scene_boundary")
+		} else {
+			out[i].Score *= 0.6
+			out[i].Signals = append(out[i].Signals, "mid_scene")
+		}
+	}
+	return out
+}
