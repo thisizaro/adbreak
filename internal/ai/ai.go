@@ -61,6 +61,7 @@ func (g *Gemini) JSON(ctx context.Context, parts []Part, schema map[string]any, 
 			"temperature":      0,
 			"responseMimeType": "application/json",
 			"responseSchema":   schema,
+			"mediaResolution":  "MEDIA_RESOLUTION_LOW",
 		},
 	})
 	var lastErr error
@@ -106,7 +107,7 @@ func (g *Gemini) once(ctx context.Context, body []byte) (string, bool, error) {
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		retry := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
-		return "", retry, fmt.Errorf("%s: HTTP %d: %.400s", g.Name(), resp.StatusCode, raw)
+		return "", retry, fmt.Errorf("%s: HTTP %d: %.1500s", g.Name(), resp.StatusCode, raw)
 	}
 	var v struct {
 		Candidates []struct {
