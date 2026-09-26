@@ -46,8 +46,8 @@ export default function TryBrand({ id, onResult }: { id: string; onResult: (r: R
 
   return (
     <section className="trybrand">
-      <h3>Add a brand the system has never seen</h3>
-      <p className="muted">Paste a catalogue entry with a synthetic brand name and new ids. Break positions stay; only brand matching re-runs, with no code change.</p>
+      <h2>Add a brand the system has never seen</h2>
+      <p className="note">Paste a catalogue entry with a synthetic brand name and new ids. Break positions stay; only brand matching re-runs, with no code change.</p>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={12} spellCheck={false} />
       <button onClick={run} disabled={job?.status === 'running' || job?.status === 'queued'}>
         Re-match with this brand

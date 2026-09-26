@@ -78,6 +78,9 @@ type Summary struct {
 	Version    string          `json:"pipeline_version"`
 	ComputedAt string          `json:"computed_at"`
 	Funnel     pipeline.Funnel `json:"funnel"`
+	BreakTimes []float64       `json:"break_times"`
+	Suppressed []float64       `json:"suppressed_times"`
+	Brands     []string        `json:"brands"`
 }
 
 func (l *Library) List() ([]Summary, error) {
@@ -94,8 +97,17 @@ func (l *Library) List() ([]Summary, error) {
 		if err != nil {
 			continue
 		}
-		out = append(out, Summary{ID: r.Episode, Duration: r.Media.Duration, Breaks: len(r.Breaks), Version: r.Version,
-			ComputedAt: r.ComputedAt.Format("2006-01-02 15:04 MST"), Funnel: r.Funnel})
+		sum := Summary{ID: r.Episode, Duration: r.Media.Duration, Breaks: len(r.Breaks), Version: r.Version,
+			ComputedAt: r.ComputedAt.Format("2006-01-02 15:04 MST"), Funnel: r.Funnel,
+			BreakTimes: []float64{}, Suppressed: []float64{}, Brands: []string{}}
+		for _, b := range r.Breaks {
+			sum.BreakTimes = append(sum.BreakTimes, b.T)
+			sum.Brands = append(sum.Brands, b.BrandName)
+		}
+		for _, u := range r.Unplaced {
+			sum.Suppressed = append(sum.Suppressed, u.T)
+		}
+		out = append(out, sum)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
