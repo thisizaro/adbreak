@@ -53,7 +53,8 @@ function Library({ open, go }: { open: (id: string) => void; go: (p: string) => 
       <h2>Episodes</h2>
       <div className="grid">
         {eps.map((e) => (
-          <button key={e.id} className="card" onClick={() => open(e.id)}>
+          <div key={e.id} className="cardwrap">
+          <button className="card" onClick={() => open(e.id)}>
             <strong>{e.id.replaceAll('_', ' ')}</strong>
             <span>
               {fmt(e.duration)} · {e.funnel.considered_for_placement} safe break{e.funnel.considered_for_placement === 1 ? '' : 's'} found · {e.funnel.placed} placed
@@ -65,6 +66,12 @@ function Library({ open, go }: { open: (id: string) => void; go: (p: string) => 
             </small>
             <small className="muted">computed by pipeline v{e.pipeline_version} at {e.computed_at}</small>
           </button>
+            {e.id.startsWith('up_') && (
+              <button className="card-del" title="Delete this upload and its cached results" onClick={() => deleteUpload(e.id).then((ok) => ok && setEps((cur) => (cur ?? []).filter((x) => x.id !== e.id)))}>
+                Delete
+              </button>
+            )}
+          </div>
         ))}
       </div>
       <Upload done={open} />
@@ -304,17 +311,25 @@ function Episode({ id, trialName, onDeleted }: { id: string; trialName?: string;
   )
 }
 
+// Asks for confirmation, then deletes an uploaded video and its cached analysis.
+async function deleteUpload(id: string): Promise<boolean> {
+  const ok = confirm(
+    'This permanently deletes the uploaded video and all of its cached analysis (transcript, scenes, AI answers, breaks).\n\n' +
+      'Uploading the same file again runs the whole pipeline from scratch, so results can differ slightly between runs.',
+  )
+  if (!ok) return false
+  const r = await fetch(`/api/episodes/${id}`, { method: 'DELETE' })
+  if (!r.ok) {
+    alert((await r.json()).error ?? `Delete failed: HTTP ${r.status}`)
+    return false
+  }
+  return true
+}
+
 function DeleteUpload({ id, onDeleted }: { id: string; onDeleted: () => void }) {
-  const [err, setErr] = useState('')
+  const [err] = useState('')
   async function del() {
-    const ok = confirm(
-      'This permanently deletes the uploaded video and all of its cached analysis (transcript, scenes, AI answers, breaks).\n\n' +
-        'Uploading the same file again runs the whole pipeline from scratch, so results can differ slightly between runs.',
-    )
-    if (!ok) return
-    const r = await fetch(`/api/episodes/${id}`, { method: 'DELETE' })
-    if (r.ok) onDeleted()
-    else setErr((await r.json()).error ?? `HTTP ${r.status}`)
+    if (await deleteUpload(id)) onDeleted()
   }
   return (
     <section className="danger">
