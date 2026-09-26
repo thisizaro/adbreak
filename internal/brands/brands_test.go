@@ -22,7 +22,7 @@ func TestDecideBlocksOnYesOrUnsureInEitherScene(t *testing.T) {
 		{BrandID: "brand_b", Fit: 0.8, Negatives: []NegCheck{{Context: "eating", Before: Yes, After: No}}},
 		{BrandID: "brand_i", Fit: 0.4, Negatives: []NegCheck{{Context: "violence", Before: No, After: No}}},
 	}
-	d := Decide(cat, v, 30)
+	d := Decide(cat, v, nil, 30)
 	if d.BrandID != "brand_i" || d.CreativeID != "i15" {
 		t.Fatalf("picked %+v", d)
 	}
@@ -38,7 +38,7 @@ func TestDecideTreatsMissingAnswersAsBlocked(t *testing.T) {
 		// brand_b omitted entirely; brand_i clean but below the fit floor
 		{BrandID: "brand_i", Fit: 0.05, Negatives: []NegCheck{{Context: "violence", Before: No, After: No}}},
 	}
-	d := Decide(cat, v, 30)
+	d := Decide(cat, v, nil, 30)
 	if d.BrandID != "" || len(d.Blocked) != 2 {
 		t.Fatalf("want no pick and 2 blocked, got %+v", d)
 	}
@@ -46,10 +46,10 @@ func TestDecideTreatsMissingAnswersAsBlocked(t *testing.T) {
 
 func TestDecidePicksLongestCreativeThatFits(t *testing.T) {
 	v := []Verdict{{BrandID: "brand_a", Fit: 0.9, Negatives: []NegCheck{{Context: "funeral", Before: No, After: No}, {Context: "bathroom", Before: No, After: No}}}}
-	if d := Decide(cat, v, 20); d.CreativeID != "a15" {
+	if d := Decide(cat, v, nil, 20); d.CreativeID != "a15" {
 		t.Fatalf("pod 20s should pick a15, got %+v", d)
 	}
-	if d := Decide(cat, v, 30); d.CreativeID != "a30" {
+	if d := Decide(cat, v, nil, 30); d.CreativeID != "a30" {
 		t.Fatalf("pod 30s should pick a30, got %+v", d)
 	}
 }
@@ -60,5 +60,17 @@ func TestLoadCatalogue(t *testing.T) {
 	got, err := Load(p)
 	if err != nil || len(got) != 1 || got[0].Creatives[0].Seconds != 15 || got[0].Negative[0] != "n" {
 		t.Fatalf("got %+v err %v", got, err)
+	}
+}
+
+func TestIndependentFlagBlocksEvenWhenPlacementModelSaysNo(t *testing.T) {
+	// Placement model confidently says no funeral; the safety check disagrees.
+	v := []Verdict{
+		{BrandID: "brand_a", Fit: 0.9, Negatives: []NegCheck{{Context: "funeral", Before: No, After: No}, {Context: "bathroom", Before: No, After: No}}},
+		{BrandID: "brand_i", Fit: 0.5, Negatives: []NegCheck{{Context: "violence", Before: No, After: No}}},
+	}
+	d := Decide(cat, v, Flags{"funeral": "safety model: yes, mourners at a cremation (+12s)"}, 30)
+	if d.BrandID != "brand_i" || d.Blocked["brand_a"] == "" {
+		t.Fatalf("%+v", d)
 	}
 }

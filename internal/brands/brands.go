@@ -79,7 +79,12 @@ type Decision struct {
 	Eligible   []string          `json:"eligible"`
 }
 
-func Decide(catalogue []Brand, verdicts []Verdict, podSeconds float64) Decision {
+// Flags are negative contexts raised by signals independent of the placement
+// model (a second model's safety check, scene tags). Keyed by context; the
+// value is the evidence. Any flag blocks every brand that lists that context.
+type Flags map[string]string
+
+func Decide(catalogue []Brand, verdicts []Verdict, flags Flags, podSeconds float64) Decision {
 	byID := map[string]Verdict{}
 	for _, v := range verdicts {
 		byID[v.BrandID] = v
@@ -94,6 +99,10 @@ func Decide(catalogue []Brand, verdicts []Verdict, podSeconds float64) Decision 
 		v, found := byID[b.ID]
 		if !found {
 			d.Blocked[b.ID] = "no verdict from model (treated as unsure)"
+			continue
+		}
+		if reason := flagReason(b, flags); reason != "" {
+			d.Blocked[b.ID] = reason
 			continue
 		}
 		if reason := blockReason(b, v); reason != "" {
@@ -118,6 +127,15 @@ func Decide(catalogue []Brand, verdicts []Verdict, podSeconds float64) Decision 
 		}
 	}
 	return d
+}
+
+func flagReason(b Brand, flags Flags) string {
+	for _, neg := range b.Negative {
+		if ev, ok := flags[neg]; ok {
+			return fmt.Sprintf("%q flagged by independent check: %s", neg, ev)
+		}
+	}
+	return ""
 }
 
 func blockReason(b Brand, v Verdict) string {

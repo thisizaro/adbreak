@@ -147,3 +147,17 @@ func ApplySceneContext(cands []Candidate, sceneStarts []float64) []Candidate {
 	}
 	return out
 }
+
+// Scaled derives duration-aware pacing: margins shrink on short episodes and
+// the minimum gap grows with length, so a 20 min and a 45 min slot pace differently.
+type Scaled struct {
+	Head, Tail, MinGap float64
+}
+
+func Scale(duration, headCap, headPct, tailCap, tailPct, gapFloor, gapFraction float64) Scaled {
+	return Scaled{
+		Head:   math.Min(headCap, headPct/100*duration),
+		Tail:   math.Min(tailCap, tailPct/100*duration),
+		MinGap: math.Max(gapFloor, gapFraction*duration),
+	}
+}

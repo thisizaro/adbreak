@@ -63,6 +63,9 @@ export type Break = {
   score: number
   rationale: string
   placement: Placement
+  boundary?: { scene_index: number; scene_start: number; shift_sec: number; note: string }
+  safety_checks?: { context: string; answer: string; evidence: string }[]
+  independent_flags?: Record<string, string> | null
   brand_name?: string
   creative?: { id: string; duration_sec: number }
 }
@@ -74,6 +77,7 @@ export type Result = {
   media: { duration: number; width: number; height: number; fps: number }
   scenes: Scene[] | null
   pacing: Record<string, number>
+  effective_pacing?: { head_margin_sec: number; tail_margin_sec: number; min_gap_sec: number; break_budget: number }
   funnel: Funnel
   breaks: Break[] | null
   unplaced?: Placement[]

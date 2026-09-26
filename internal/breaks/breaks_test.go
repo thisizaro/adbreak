@@ -1,6 +1,7 @@
 package breaks
 
 import (
+	"math"
 	"testing"
 
 	"github.com/thisizaro/adbreak/internal/speech"
@@ -70,5 +71,16 @@ func TestApplySceneContext(t *testing.T) {
 	got = ApplySceneContext([]Candidate{{T: 300, Score: 0.5}}, []float64{100})
 	if got[0].Score != 0.3 || got[0].Signals[0] != "mid_scene" {
 		t.Fatalf("mid-scene: %+v", got)
+	}
+}
+
+func TestScale(t *testing.T) {
+	s := Scale(1227, 180, 8, 120, 5, 240, 0.2) // 20.5 min
+	if math.Abs(s.Head-98.16) > 0.01 || math.Abs(s.Tail-61.35) > 0.01 || math.Abs(s.MinGap-245.4) > 0.01 {
+		t.Fatalf("short: %+v", s)
+	}
+	l := Scale(2700, 180, 8, 120, 5, 240, 0.2) // 45 min
+	if l.Head != 180 || l.Tail != 120 || l.MinGap != 540 {
+		t.Fatalf("long: %+v", l)
 	}
 }

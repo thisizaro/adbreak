@@ -61,3 +61,7 @@ tr.rej { color: var(--muted); }
 .pacing span { color: var(--muted); font-size: 12px; }
 .joblog { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-family: ui-monospace, monospace; font-size: 13px; }
 .upload input { color: var(--muted); }
+.safety { margin-top: 10px; font-size: 13px; }
+.chip { display: inline-block; padding: 2px 8px; margin: 4px 6px 0 0; border-radius: 999px; font-size: 12px; }
+.chip.ok { background: #1d3325; color: #9fe0b2; }
+.chip.bad { background: #3d1f1a; color: #ffb4a3; }

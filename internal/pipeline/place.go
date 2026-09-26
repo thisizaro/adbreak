@@ -129,7 +129,7 @@ func (d Deps) Place(ctx context.Context, ep Episode, t float64, catalogue []bran
 			return Placement{}, err
 		}
 		p.T = t
-		p.Decision = brands.Decide(catalogue, p.Verdicts, podSeconds)
+		p.Decision = brands.Decide(catalogue, p.Verdicts, nil, podSeconds)
 		d.progress("place", "t=%.1f brand=%q blocked=%d", t, p.Decision.BrandID, len(p.Decision.Blocked))
 		return p, nil
 	})

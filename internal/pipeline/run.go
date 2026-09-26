@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -25,6 +26,25 @@ type Pacing struct {
 	SpeechMargin     float64 `json:"speech_margin_sec"`
 	PodSeconds       float64 `json:"pod_seconds"`
 	MinScore         float64 `json:"min_score"`
+	HeadPct          float64 `json:"head_pct"`
+	TailPct          float64 `json:"tail_pct"`
+	GapFraction      float64 `json:"gap_fraction"`
+}
+
+// Effective is the pacing actually applied to this episode after scaling.
+type Effective struct {
+	Head   float64 `json:"head_margin_sec"`
+	Tail   float64 `json:"tail_margin_sec"`
+	MinGap float64 `json:"min_gap_sec"`
+	Budget int     `json:"break_budget"`
+}
+
+// Boundary explains how a break relates to the scene structure.
+type Boundary struct {
+	SceneIndex int     `json:"scene_index"`
+	SceneStart float64 `json:"scene_start"`
+	Shift      float64 `json:"shift_sec"`
+	Note       string  `json:"note"`
 }
 
 type Funnel struct {
@@ -43,6 +63,9 @@ type Break struct {
 	Score     float64          `json:"score"`
 	Rationale string           `json:"rationale"`
 	Placement Placement        `json:"placement"`
+	Boundary  Boundary         `json:"boundary"`
+	Safety    []SafetyCheck    `json:"safety_checks"`
+	Flags     brands.Flags     `json:"independent_flags"`
 	Creative  *brands.Creative `json:"creative,omitempty"`
 	BrandName string           `json:"brand_name,omitempty"`
 }
@@ -55,6 +78,7 @@ type Result struct {
 	Media       media.Info         `json:"media"`
 	Scenes      []scenes.Scene     `json:"scenes"`
 	Pacing      Pacing             `json:"pacing"`
+	Effective   Effective          `json:"effective_pacing"`
 	Funnel      Funnel             `json:"funnel"`
 	Breaks      []Break            `json:"breaks"`
 	Unplaced    []Placement        `json:"unplaced,omitempty"`
@@ -91,8 +115,10 @@ func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p P
 		cands = append(cands, breaks.Candidate{T: t, Signals: []string{"shot_cut"}})
 	}
 	r.Funnel.Candidates = len(cands)
-	cands = breaks.Filter(cands, tr, breaks.Rules{Duration: m.Info.Duration, HeadMargin: p.HeadMargin,
-		TailMargin: p.TailMargin, SpeechMargin: p.SpeechMargin})
+	sp := breaks.Scale(m.Info.Duration, p.HeadMargin, p.HeadPct, p.TailMargin, p.TailPct, p.MinGap, p.GapFraction)
+	r.Effective = Effective{Head: sp.Head, Tail: sp.Tail, MinGap: sp.MinGap}
+	cands = breaks.Filter(cands, tr, breaks.Rules{Duration: m.Info.Duration, HeadMargin: sp.Head,
+		TailMargin: sp.Tail, SpeechMargin: p.SpeechMargin})
 	r.Funnel.PassHardFilter = countLive(cands)
 	d.progress("filter", "%d of %d candidates pass hard filters", r.Funnel.PassHardFilter, len(cands))
 
@@ -109,7 +135,8 @@ func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p P
 
 	budget := breaks.MaxBreaks(m.Info.Duration, p.MaxBreaksPerHour, p.MaxAdLoadPct, p.PodSeconds)
 	r.Funnel.BreakBudget = budget
-	picked := breaks.Select(cands, breaks.Limits{MaxBreaks: budget, MinGap: p.MinGap, MinScore: p.MinScore})
+	r.Effective.Budget = budget
+	picked := breaks.Select(cands, breaks.Limits{MaxBreaks: budget, MinGap: sp.MinGap, MinScore: p.MinScore})
 	r.Funnel.Selected = len(picked)
 
 	byID := map[string]brands.Brand{}
@@ -122,12 +149,21 @@ func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p P
 		if err != nil {
 			return Result{}, err
 		}
+		negs := negativeUnion(catalogue)
+		checks, err := d.Safety(ctx, ep, c.T, negs)
+		if err != nil {
+			return Result{}, err
+		}
+		flags := SafetyFlags(negs, checks, sc, c.T)
+		// The decision is always recomputed in code from cached model answers.
+		pl.Decision = brands.Decide(catalogue, pl.Verdicts, flags, p.PodSeconds)
 		if pl.Decision.BrandID == "" {
 			r.Unplaced = append(r.Unplaced, pl)
 			continue
 		}
 		b := byID[pl.Decision.BrandID]
-		br := Break{T: c.T, Score: c.Score, Rationale: c.Rationale, Placement: pl, BrandName: b.Name}
+		br := Break{T: c.T, Score: c.Score, Rationale: c.Rationale, Placement: pl, BrandName: b.Name,
+			Boundary: nearestBoundary(sc, c.T), Safety: checks, Flags: flags}
 		for _, cr := range b.Creatives {
 			if cr.ID == pl.Decision.CreativeID {
 				cr := cr
@@ -152,3 +188,32 @@ func countLive(cs []breaks.Candidate) int {
 	}
 	return n
 }
+
+func nearestBoundary(sc []scenes.Scene, t float64) Boundary {
+	best := Boundary{SceneIndex: -1}
+	for _, s := range sc[min(1, len(sc)):] {
+		if best.SceneIndex < 0 || abs(t-s.Start) < abs(best.Shift) {
+			best = Boundary{SceneIndex: s.Index, SceneStart: s.Start, Shift: t - s.Start}
+		}
+	}
+	switch {
+	case best.SceneIndex < 0:
+		best.Note = "no scene boundary in this episode"
+	case abs(best.Shift) < 1:
+		best.Note = fmt.Sprintf("at the start of scene %d", best.SceneIndex+1)
+	case abs(best.Shift) <= 20:
+		best.Note = fmt.Sprintf("scene %d starts at %s; nearest speech-safe point is %+.0fs from it because speech crosses the transition", best.SceneIndex+1, clock(best.SceneStart), best.Shift)
+	default:
+		best.Note = fmt.Sprintf("mid-scene: nearest scene start (scene %d, %s) is %+.0fs away; chosen for a clear pause, scored down x0.6", best.SceneIndex+1, clock(best.SceneStart), best.Shift)
+	}
+	return best
+}
+
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func clock(sec float64) string { return fmt.Sprintf("%d:%02d", int(sec)/60, int(sec)%60) }
