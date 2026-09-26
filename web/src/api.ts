@@ -4,9 +4,11 @@ export type Funnel = {
   candidates: number
   pass_hard_filters: number
   pass_ai_speech_check: number
+  caught_by_ai_audio_check: number
   break_budget: number
-  selected: number
+  considered_for_placement: number
   placed: number
+  suppressed_for_brand_safety: number
 }
 
 export type Summary = {
@@ -39,7 +41,7 @@ export type Placement = {
     fit?: number
     rationale?: string
     blocked: Record<string, string>
-    eligible: string[]
+    unblocked: string[]
   }
 }
 
@@ -80,7 +82,7 @@ export type Result = {
   effective_pacing?: { head_margin_sec: number; tail_margin_sec: number; min_gap_sec: number; break_budget: number }
   funnel: Funnel
   breaks: Break[] | null
-  unplaced?: Placement[]
+  unplaced?: Placement[] | null
   candidates: Candidate[]
   asr_provider: string
   ai_provider: string

@@ -54,9 +54,13 @@ function Library({ open }: { open: (id: string) => void }) {
         {eps.map((e) => (
           <button key={e.id} className="card" onClick={() => open(e.id)}>
             <strong>{e.id.replaceAll('_', ' ')}</strong>
-            <span>{fmt(e.duration)} · {e.breaks} break{e.breaks === 1 ? '' : 's'}</span>
+            <span>
+              {fmt(e.duration)} · {e.funnel.considered_for_placement} safe break{e.funnel.considered_for_placement === 1 ? '' : 's'} found · {e.funnel.placed} placed
+              {e.funnel.suppressed_for_brand_safety > 0 && ` · ${e.funnel.suppressed_for_brand_safety} suppressed for brand safety`}
+            </span>
             <small>
-              {e.funnel.shots} shots → {e.funnel.scenes} scenes → {e.funnel.pass_hard_filters} past speech guard → {e.funnel.pass_ai_speech_check} past AI check → {e.funnel.placed} placed
+              {e.funnel.shots} shots → {e.funnel.scenes} scenes → {e.funnel.pass_hard_filters} past transcript guard → AI audio check caught{' '}
+              {e.funnel.caught_by_ai_audio_check} mid-dialogue cuts
             </small>
             <small className="muted">computed by pipeline v{e.pipeline_version} at {e.computed_at}</small>
           </button>
@@ -131,10 +135,11 @@ function Episode({ id }: { id: string }) {
           {[
             ['shots', f.shots],
             ['scenes', f.scenes],
-            ['pass head/tail + speech guard', f.pass_hard_filters],
-            ['pass AI speech check', f.pass_ai_speech_check],
-            [`selected (budget ${f.break_budget})`, f.selected],
+            ['pass head/tail + transcript guard', f.pass_hard_filters],
+            ['mid-dialogue cuts caught by AI audio check (transcript said silent)', f.caught_by_ai_audio_check],
+            [`safe breaks considered (budget ${f.break_budget})`, f.considered_for_placement],
             ['placed with a brand', f.placed],
+            ['suppressed for brand safety', f.suppressed_for_brand_safety],
           ].map(([label, n]) => (
             <div key={label as string}>
               <b>{n}</b>
@@ -146,7 +151,11 @@ function Episode({ id }: { id: string }) {
 
       <section>
         <h3>Breaks</h3>
-        {breaks.length === 0 && <p className="muted">No break cleared the rules for this episode.</p>}
+        {breaks.length === 0 && (
+          <p className="muted">
+            No break was placed. {f.suppressed_for_brand_safety > 0 ? 'Every safe pause sits next to content no brand may appear against (see below).' : 'No pause cleared the rules.'}
+          </p>
+        )}
         {breaks.map((b, i) => (
           <div key={i} className="break">
             <div className="row">
@@ -195,6 +204,28 @@ function Episode({ id }: { id: string }) {
           </div>
         ))}
       </section>
+
+      {(res.unplaced ?? []).length > 0 && (
+        <section>
+          <h3>Suppressed for brand safety ({(res.unplaced ?? []).length})</h3>
+          <p className="muted">Speech-safe pauses where no brand was allowed. A wrongly placed ad is a violation; a skipped break costs one impression.</p>
+          {(res.unplaced ?? []).map((u) => {
+            const reasons = Object.values(u.decision.blocked)
+            const top = reasons.find((r) => r.includes('independent')) ?? reasons[0] ?? 'no brand fit this moment'
+            return (
+              <div key={u.t} className="break suppressed">
+                <div className="row">
+                  <b>{fmt(u.t)}</b>
+                  <span className="muted">{Object.keys(u.decision.blocked).length} of {Object.keys(u.decision.blocked).length + u.decision.unblocked.length} brands blocked</span>
+                  <button onClick={() => player.current?.seek(Math.max(0, u.t - 6))}>Watch</button>
+                </div>
+                <p>{u.scene_before.description}</p>
+                <p className="blocked">{top}</p>
+              </div>
+            )
+          })}
+        </section>
+      )}
 
       <section>
         <h3>Scenes ({(res.scenes ?? []).length})</h3>

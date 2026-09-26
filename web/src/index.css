@@ -30,7 +30,7 @@ h3 { margin: 28px 0 10px; font-size: 15px; text-transform: uppercase; letter-spa
 .adbadge { position: absolute; left: 12px; bottom: 12px; background: rgba(0, 0, 0, 0.7); padding: 6px 10px; border-radius: 6px; font-size: 14px; }
 .track { position: relative; height: 10px; background: var(--panel); border-radius: 5px; margin-top: 8px; }
 .progress { position: absolute; left: 0; top: 0; bottom: 0; background: #3a4252; border-radius: 5px; }
-.marker { position: absolute; top: -3px; width: 4px; height: 16px; background: var(--accent); border-radius: 2px; transform: translateX(-2px); }
+.marker { position: absolute; top: -5px; width: 8px; height: 20px; cursor: pointer; background: var(--accent); border-radius: 2px; transform: translateX(-2px); }
 .funnel { display: flex; gap: 8px; flex-wrap: wrap; }
 .funnel div { flex: 1; min-width: 140px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; }
 .funnel b { font-size: 24px; }
@@ -68,3 +68,5 @@ tr.rej { color: var(--muted); }
 .trybrand textarea { width: 100%; box-sizing: border-box; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-family: ui-monospace, monospace; font-size: 13px; margin-bottom: 8px; }
 .trialbar { background: #2b2412; border: 1px solid #5a4a1a; border-radius: 8px; padding: 8px 12px; }
 .trialbar button { margin-left: 8px; }
+.skip { margin-left: 10px; padding: 2px 8px; font-size: 12px; }
+.suppressed { border-color: #5a2a22; }
