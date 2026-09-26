@@ -6,6 +6,7 @@ package jobs
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -22,14 +23,17 @@ const (
 )
 
 type Job struct {
-	ID       string    `json:"id"`
-	Episode  string    `json:"episode"`
-	Status   Status    `json:"status"`
-	Stage    string    `json:"stage"`
-	Log      []string  `json:"log"`
-	Error    string    `json:"error,omitempty"`
-	Created  time.Time `json:"created"`
-	Finished time.Time `json:"finished,omitzero"`
+	ID       string          `json:"id"`
+	Kind     string          `json:"kind"` // "analyze" or "try-brand"
+	Payload  json.RawMessage `json:"-"`
+	Result   string          `json:"result,omitempty"`
+	Episode  string          `json:"episode"`
+	Status   Status          `json:"status"`
+	Stage    string          `json:"stage"`
+	Log      []string        `json:"log"`
+	Error    string          `json:"error,omitempty"`
+	Created  time.Time       `json:"created"`
+	Finished time.Time       `json:"finished,omitzero"`
 }
 
 type Event struct {
@@ -67,8 +71,8 @@ func (b *Bus) Publish(e Event) error {
 	return nil
 }
 
-// RunFunc executes the pipeline for one episode, reporting progress.
-type RunFunc func(ctx context.Context, episode string, progress func(stage, msg string)) error
+// RunFunc executes one job, reporting progress, and returns a result reference.
+type RunFunc func(ctx context.Context, j Job, progress func(stage, msg string)) (string, error)
 
 type Runner struct {
 	bus  *Bus
@@ -106,7 +110,9 @@ func (r *Runner) Start(ctx context.Context, queueSize int) {
 	}()
 }
 
-func (r *Runner) Submit(episode string) (Job, error) {
+func (r *Runner) Submit(episode string) (Job, error) { return r.SubmitKind("analyze", episode, nil) }
+
+func (r *Runner) SubmitKind(kind, episode string, payload json.RawMessage) (Job, error) {
 	r.mu.Lock()
 	if r.PerDay > 0 {
 		n := 0
@@ -121,7 +127,7 @@ func (r *Runner) Submit(episode string) (Job, error) {
 		}
 	}
 	r.seq++
-	j := &Job{ID: fmt.Sprintf("job-%d-%d", time.Now().Unix(), r.seq), Episode: episode, Status: Queued, Created: r.now().UTC()}
+	j := &Job{ID: fmt.Sprintf("job-%d-%d", time.Now().Unix(), r.seq), Kind: kind, Payload: payload, Episode: episode, Status: Queued, Created: r.now().UTC()}
 	r.jobs[j.ID] = j
 	snap := *j
 	r.mu.Unlock()
@@ -158,7 +164,7 @@ func (r *Runner) execute(ctx context.Context, id string) {
 		return
 	}
 	r.update(id, func(j *Job) { j.Status = Running })
-	err := r.run(ctx, j.Episode, func(stage, msg string) {
+	result, err := r.run(ctx, j, func(stage, msg string) {
 		r.update(id, func(j *Job) { j.Stage = stage; j.Log = append(j.Log, stage+": "+msg) })
 	})
 	r.update(id, func(j *Job) {
@@ -166,7 +172,7 @@ func (r *Runner) execute(ctx context.Context, id string) {
 		if err != nil {
 			j.Status, j.Error = Failed, err.Error()
 		} else {
-			j.Status, j.Stage = Done, "done"
+			j.Status, j.Stage, j.Result = Done, "done", result
 		}
 	})
 }

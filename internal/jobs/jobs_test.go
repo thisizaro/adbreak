@@ -24,7 +24,8 @@ func wait(t *testing.T, r *Runner, id string, want Status) Job {
 
 func TestRunnerRunsOneAtATimeAndRecordsProgress(t *testing.T) {
 	var running, maxRunning atomic.Int32
-	run := func(ctx context.Context, ep string, progress func(string, string)) error {
+	run := func(ctx context.Context, j Job, progress func(string, string)) (string, error) {
+		ep := j.Episode
 		n := running.Add(1)
 		if n > maxRunning.Load() {
 			maxRunning.Store(n)
@@ -33,9 +34,9 @@ func TestRunnerRunsOneAtATimeAndRecordsProgress(t *testing.T) {
 		progress("media", "probing "+ep)
 		time.Sleep(20 * time.Millisecond)
 		if ep == "bad" {
-			return errors.New("boom")
+			return "", errors.New("boom")
 		}
-		return nil
+		return "", nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -55,7 +56,7 @@ func TestRunnerRunsOneAtATimeAndRecordsProgress(t *testing.T) {
 
 func TestSubmitFailsWhenQueueFull(t *testing.T) {
 	block := make(chan struct{})
-	r := NewRunner(NewBus(), func(context.Context, string, func(string, string)) error { <-block; return nil })
+	r := NewRunner(NewBus(), func(context.Context, Job, func(string, string)) (string, error) { <-block; return "", nil })
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	defer close(block)
@@ -69,7 +70,7 @@ func TestSubmitFailsWhenQueueFull(t *testing.T) {
 }
 
 func TestDailyCap(t *testing.T) {
-	r := NewRunner(NewBus(), func(context.Context, string, func(string, string)) error { return nil })
+	r := NewRunner(NewBus(), func(context.Context, Job, func(string, string)) (string, error) { return "", nil })
 	r.PerDay = 2
 	now := time.Now()
 	r.now = func() time.Time { return now }

@@ -41,6 +41,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/episodes", s.episodes)
 	mux.HandleFunc("GET /api/episodes/{id}", s.episode)
 	mux.HandleFunc("GET /api/episodes/{id}/vmap.xml", s.vmap)
+	mux.HandleFunc("POST /api/episodes/{id}/try-brand", s.tryBrand)
+	mux.HandleFunc("GET /api/episodes/{id}/trials/{name}", s.trial)
 	mux.HandleFunc("POST /api/uploads", s.createUpload)
 	mux.HandleFunc("PUT /api/uploads/{id}", s.putUpload)
 	mux.HandleFunc("POST /api/uploads/{id}/finalize", s.finalizeUpload)
@@ -84,6 +86,9 @@ func (s *Server) episode(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) vmap(w http.ResponseWriter, r *http.Request) {
 	res, err := s.lib.Result(r.PathValue("id"))
+	if t := r.URL.Query().Get("trial"); t != "" {
+		res, err = s.lib.Trial(r.PathValue("id"), t)
+	}
 	if err != nil {
 		fail(w, err)
 		return

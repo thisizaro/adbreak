@@ -12,10 +12,14 @@ import (
 	"github.com/thisizaro/adbreak/internal/breaks"
 	"github.com/thisizaro/adbreak/internal/media"
 	"github.com/thisizaro/adbreak/internal/scenes"
+	"github.com/thisizaro/adbreak/internal/speech"
 )
 
+// RejectNoBrand marks a selected break that no brand could take.
+const RejectNoBrand = "no eligible brand (all blocked or no fit)"
+
 // Version is stamped on every result so the UI can show which pipeline produced it.
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 type Pacing struct {
 	MaxBreaksPerHour float64 `json:"max_breaks_per_hour"`
@@ -86,6 +90,7 @@ type Result struct {
 	ASRProvider string             `json:"asr_provider"`
 	AIProvider  string             `json:"ai_provider"`
 	DecideModel string             `json:"decide_provider,omitempty"`
+	Trial       string             `json:"trial,omitempty"`
 }
 
 func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p Pacing) (Result, error) {
@@ -136,41 +141,35 @@ func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p P
 	budget := breaks.MaxBreaks(m.Info.Duration, p.MaxBreaksPerHour, p.MaxAdLoadPct, p.PodSeconds)
 	r.Funnel.BreakBudget = budget
 	r.Effective.Budget = budget
-	picked := breaks.Select(cands, breaks.Limits{MaxBreaks: budget, MinGap: sp.MinGap, MinScore: p.MinScore})
-	r.Funnel.Selected = len(picked)
-
-	byID := map[string]brands.Brand{}
-	for _, b := range catalogue {
-		byID[b.ID] = b
-	}
-	for _, i := range picked {
-		c := cands[i]
-		pl, err := d.Place(ctx, ep, c.T, catalogue, tr, p.PodSeconds)
+	// Placement-aware selection: a break no brand can take (all blocked, or no
+	// fit) is rejected with its reason and the DP re-runs, so the next-best break
+	// gets the slot. Bounded rounds keep the AI cost predictable.
+	const maxRounds = 4
+	for round := 0; round < maxRounds; round++ {
+		picked := breaks.Select(cands, breaks.Limits{MaxBreaks: budget, MinGap: sp.MinGap, MinScore: p.MinScore})
+		r.Funnel.Selected = len(picked)
+		var sel []breaks.Candidate
+		for _, i := range picked {
+			sel = append(sel, cands[i])
+		}
+		placed, unplaced, err := d.placeAll(ctx, ep, sel, catalogue, tr, sc, p)
 		if err != nil {
 			return Result{}, err
 		}
-		negs := negativeUnion(catalogue)
-		checks, err := d.Safety(ctx, ep, c.T, negs)
-		if err != nil {
-			return Result{}, err
+		r.Breaks = placed
+		if len(unplaced) == 0 || round == maxRounds-1 {
+			r.Unplaced = append(r.Unplaced, unplaced...)
+			break
 		}
-		flags := SafetyFlags(negs, checks, sc, c.T)
-		// The decision is always recomputed in code from cached model answers.
-		pl.Decision = brands.Decide(catalogue, pl.Verdicts, flags, p.PodSeconds)
-		if pl.Decision.BrandID == "" {
-			r.Unplaced = append(r.Unplaced, pl)
-			continue
-		}
-		b := byID[pl.Decision.BrandID]
-		br := Break{T: c.T, Score: c.Score, Rationale: c.Rationale, Placement: pl, BrandName: b.Name,
-			Boundary: nearestBoundary(sc, c.T), Safety: checks, Flags: flags}
-		for _, cr := range b.Creatives {
-			if cr.ID == pl.Decision.CreativeID {
-				cr := cr
-				br.Creative = &cr
+		for _, u := range unplaced {
+			r.Unplaced = append(r.Unplaced, u)
+			for i := range cands {
+				if cands[i].T == u.T {
+					cands[i].Rejected = RejectNoBrand
+				}
 			}
 		}
-		r.Breaks = append(r.Breaks, br)
+		d.progress("select", "round %d: %d break(s) had no eligible brand, re-selecting", round+1, len(unplaced))
 	}
 	r.Funnel.Placed = len(r.Breaks)
 	r.Candidates = cands
@@ -217,3 +216,86 @@ func abs(x float64) float64 {
 }
 
 func clock(sec float64) string { return fmt.Sprintf("%d:%02d", int(sec)/60, int(sec)%60) }
+
+// placeAll runs placement and the independent safety check for each selected
+// break, then decides in code. Shared by Run and Rematch.
+func (d Deps) placeAll(ctx context.Context, ep Episode, sel []breaks.Candidate, catalogue []brands.Brand,
+	tr speech.Transcript, sc []scenes.Scene, p Pacing) ([]Break, []Placement, error) {
+	byID := map[string]brands.Brand{}
+	for _, b := range catalogue {
+		byID[b.ID] = b
+	}
+	negs := negativeUnion(catalogue)
+	var placed []Break
+	var unplaced []Placement
+	for _, c := range sel {
+		pl, err := d.Place(ctx, ep, c.T, catalogue, tr, p.PodSeconds)
+		if err != nil {
+			return nil, nil, err
+		}
+		checks, err := d.Safety(ctx, ep, c.T, negs)
+		if err != nil {
+			return nil, nil, err
+		}
+		flags := SafetyFlags(negs, checks, sc, c.T)
+		// The decision is always recomputed in code from cached model answers.
+		pl.Decision = brands.Decide(catalogue, pl.Verdicts, flags, p.PodSeconds)
+		if pl.Decision.BrandID == "" {
+			unplaced = append(unplaced, pl)
+			continue
+		}
+		b := byID[pl.Decision.BrandID]
+		br := Break{T: c.T, Score: c.Score, Rationale: c.Rationale, Placement: pl, BrandName: b.Name,
+			Boundary: nearestBoundary(sc, c.T), Safety: checks, Flags: flags}
+		for _, cr := range b.Creatives {
+			if cr.ID == pl.Decision.CreativeID {
+				cr := cr
+				br.Creative = &cr
+			}
+		}
+		placed = append(placed, br)
+	}
+	return placed, unplaced, nil
+}
+
+// Rematch re-places an analysed episode's selected breaks against a new
+// catalogue (for example with a brand added at runtime). Where breaks fall does
+// not change; only brand matching re-runs. Nothing about any brand is coded.
+func (d Deps) Rematch(ctx context.Context, ep Episode, base Result, catalogue []brands.Brand, name string) (Result, error) {
+	m, err := d.Media(ctx, ep)
+	if err != nil {
+		return Result{}, err
+	}
+	tr, err := d.Transcript(ctx, ep)
+	if err != nil {
+		return Result{}, err
+	}
+	sc, err := d.Scenes(ctx, ep, m, tr)
+	if err != nil {
+		return Result{}, err
+	}
+	// Only the breaks pacing kept are re-placed; breaks dropped earlier stay
+	// dropped, so the min-gap and budget guarantees still hold.
+	var sel []breaks.Candidate
+	times := map[float64]bool{}
+	for _, b := range base.Breaks {
+		times[b.T] = true
+	}
+	for _, c := range base.Candidates {
+		if times[c.T] {
+			sel = append(sel, c)
+		}
+	}
+	r := base
+	r.ComputedAt = time.Now().UTC()
+	var newlyUnplaced []Placement
+	r.Breaks, newlyUnplaced, err = d.placeAll(ctx, ep, sel, catalogue, tr, sc, base.Pacing)
+	if err != nil {
+		return Result{}, err
+	}
+	r.Unplaced = append(append([]Placement(nil), base.Unplaced...), newlyUnplaced...)
+	r.Funnel.Placed = len(r.Breaks)
+	r.Trial = name
+	b, _ := json.MarshalIndent(r, "", "  ")
+	return r, os.WriteFile(filepath.Join(ep.Dir, name+".json"), b, 0o644)
+}

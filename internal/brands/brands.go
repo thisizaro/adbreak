@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
+	"strings"
 )
 
 type Creative struct {
@@ -166,4 +168,33 @@ func pickCreative(cs []Creative, pod float64) (Creative, bool) {
 		}
 	}
 	return best, found
+}
+
+var safeBrandID = regexp.MustCompile(`^[a-z0-9_]{2,40}$`)
+
+// Validate checks a brand supplied at runtime before it can reach the pipeline.
+func (b Brand) Validate() error {
+	switch {
+	case !safeBrandID.MatchString(b.ID):
+		return fmt.Errorf("brand_id must be 2-40 chars of a-z, 0-9, _")
+	case strings.TrimSpace(b.Name) == "" || len(b.Name) > 60:
+		return fmt.Errorf("display_name is required (max 60 chars)")
+	case len(b.Target) == 0 || len(b.Target) > 30:
+		return fmt.Errorf("target_contexts needs 1-30 entries")
+	case len(b.Negative) > 30:
+		return fmt.Errorf("negative_contexts allows at most 30 entries")
+	case len(b.Creatives) == 0 || len(b.Creatives) > 5:
+		return fmt.Errorf("creatives needs 1-5 entries")
+	}
+	for _, c := range b.Creatives {
+		if !safeBrandID.MatchString(c.ID) || c.Seconds < 5 || c.Seconds > 60 {
+			return fmt.Errorf("creative %q needs an id of a-z, 0-9, _ and duration_sec 5-60", c.ID)
+		}
+	}
+	for _, s := range append(append([]string{}, b.Target...), b.Negative...) {
+		if strings.TrimSpace(s) == "" || len(s) > 40 {
+			return fmt.Errorf("contexts must be non-empty and at most 40 chars")
+		}
+	}
+	return nil
 }

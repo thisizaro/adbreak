@@ -103,8 +103,8 @@ function clockToSec(s: string): number {
 }
 
 // The player schedules ads from the VMAP document itself, not from the debug JSON.
-export async function loadVMAP(id: string): Promise<AdSlot[]> {
-  const r = await fetch(`/api/episodes/${id}/vmap.xml`)
+export async function loadVMAP(id: string, trial?: string): Promise<AdSlot[]> {
+  const r = await fetch(`/api/episodes/${id}/vmap.xml${trial ? `?trial=${trial}` : ''}`)
   if (!r.ok) throw new Error(`vmap: HTTP ${r.status}`)
   const doc = new DOMParser().parseFromString(await r.text(), 'application/xml')
   const NS = 'http://www.iab.net/videosuite/vmap'
