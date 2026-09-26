@@ -87,6 +87,15 @@ func main() {
 		}
 	})
 	runner.PerDay = cfg.JobsPerDay
+	if cfg.SelfURL != "" {
+		pinger := &http.Client{Timeout: 10 * time.Second}
+		runner.PingEvery = time.Minute
+		runner.Ping = func() {
+			if resp, err := pinger.Get(cfg.SelfURL + "/api/health"); err == nil {
+				resp.Body.Close()
+			}
+		}
+	}
 	runner.Start(ctx, 8)
 
 	var target server.UploadTarget = server.LocalTarget{}

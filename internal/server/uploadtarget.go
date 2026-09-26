@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -12,13 +13,13 @@ import (
 
 // UploadTarget hands the browser somewhere to PUT video bytes.
 type UploadTarget interface {
-	Begin(ctx context.Context, id, origin string) (string, error)
+	Begin(ctx context.Context, id, origin string, size int64) (string, error)
 }
 
 // LocalTarget receives uploads on this server (dev only; Cloud Run caps bodies at 32 MiB).
 type LocalTarget struct{}
 
-func (LocalTarget) Begin(_ context.Context, id, _ string) (string, error) {
+func (LocalTarget) Begin(_ context.Context, id, _ string, _ int64) (string, error) {
 	return "/api/uploads/" + id, nil
 }
 
@@ -32,7 +33,7 @@ type GCSTarget struct {
 	Client *http.Client
 }
 
-func (g GCSTarget) Begin(ctx context.Context, id, origin string) (string, error) {
+func (g GCSTarget) Begin(ctx context.Context, id, origin string, size int64) (string, error) {
 	name := g.Prefix + id + ".mp4"
 	u := fmt.Sprintf("https://storage.googleapis.com/upload/storage/v1/b/%s/o?uploadType=resumable&name=%s",
 		url.PathEscape(g.Bucket), url.QueryEscape(name))
@@ -46,6 +47,10 @@ func (g GCSTarget) Begin(ctx context.Context, id, origin string) (string, error)
 	}
 	req.Header.Set("Authorization", "Bearer "+tok.AccessToken)
 	req.Header.Set("X-Upload-Content-Type", "video/mp4")
+	if size > 0 {
+		// GCS then refuses any upload whose length differs from what was declared.
+		req.Header.Set("X-Upload-Content-Length", strconv.FormatInt(size, 10))
+	}
 	if origin != "" {
 		req.Header.Set("Origin", origin) // lets the browser PUT cross-origin to the session
 	}

@@ -31,7 +31,9 @@ export default function TryBrand({ id, onResult }: { id: string; onResult: (r: R
       while (j.status === 'queued' || j.status === 'running') {
         setJob(j)
         await new Promise((res) => setTimeout(res, 1500))
-        j = await (await fetch(`/api/jobs/${j.id}`)).json()
+        const pr = await fetch(`/api/jobs/${j.id}`)
+        if (pr.status === 404) throw new Error('job lost: the server restarted. Please try again.')
+        j = await pr.json()
       }
       setJob(j)
       if (j.status !== 'done' || !j.result) throw new Error(j.error ?? 'job failed')
@@ -45,7 +47,7 @@ export default function TryBrand({ id, onResult }: { id: string; onResult: (r: R
   return (
     <section className="trybrand">
       <h3>Add a brand the system has never seen</h3>
-      <p className="muted">Paste a catalogue entry. Break positions stay; only brand matching re-runs, with no code change.</p>
+      <p className="muted">Paste a catalogue entry with a synthetic brand name and new ids. Break positions stay; only brand matching re-runs, with no code change.</p>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={12} spellCheck={false} />
       <button onClick={run} disabled={job?.status === 'running' || job?.status === 'queued'}>
         Re-match with this brand

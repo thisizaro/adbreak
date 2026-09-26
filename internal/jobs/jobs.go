@@ -84,6 +84,31 @@ type Runner struct {
 	// in memory, so a restart resets it; the Cloud Run instance is long-lived enough.
 	PerDay int
 	now    func() time.Time
+	// Ping, if set, runs every PingEvery while a job executes. On Cloud Run it
+	// requests the service's own URL so the instance is not scaled down mid-job
+	// when the browser tab that started it has been closed.
+	Ping      func()
+	PingEvery time.Duration
+}
+
+// CapReached reports whether the rolling daily cap would reject a new job.
+func (r *Runner) CapReached() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.capReachedLocked()
+}
+
+func (r *Runner) capReachedLocked() bool {
+	if r.PerDay <= 0 {
+		return false
+	}
+	n := 0
+	for _, j := range r.jobs {
+		if r.now().Sub(j.Created) < 24*time.Hour {
+			n++
+		}
+	}
+	return n >= r.PerDay
 }
 
 // ErrDailyCap is returned when the rolling 24h job cap is reached.
@@ -114,17 +139,9 @@ func (r *Runner) Submit(episode string) (Job, error) { return r.SubmitKind("anal
 
 func (r *Runner) SubmitKind(kind, episode string, payload json.RawMessage) (Job, error) {
 	r.mu.Lock()
-	if r.PerDay > 0 {
-		n := 0
-		for _, j := range r.jobs {
-			if r.now().Sub(j.Created) < 24*time.Hour {
-				n++
-			}
-		}
-		if n >= r.PerDay {
-			r.mu.Unlock()
-			return Job{}, ErrDailyCap
-		}
+	if r.capReachedLocked() {
+		r.mu.Unlock()
+		return Job{}, ErrDailyCap
 	}
 	r.seq++
 	j := &Job{ID: fmt.Sprintf("job-%d-%d", time.Now().Unix(), r.seq), Kind: kind, Payload: payload, Episode: episode, Status: Queued, Created: r.now().UTC()}
@@ -164,6 +181,22 @@ func (r *Runner) execute(ctx context.Context, id string) {
 		return
 	}
 	r.update(id, func(j *Job) { j.Status = Running })
+	if r.Ping != nil && r.PingEvery > 0 {
+		stop := make(chan struct{})
+		defer close(stop)
+		go func() {
+			t := time.NewTicker(r.PingEvery)
+			defer t.Stop()
+			for {
+				select {
+				case <-stop:
+					return
+				case <-t.C:
+					r.Ping()
+				}
+			}
+		}()
+	}
 	result, err := r.run(ctx, j, func(stage, msg string) {
 		r.update(id, func(j *Job) { j.Stage = stage; j.Log = append(j.Log, stage+": "+msg) })
 	})

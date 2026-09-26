@@ -10,8 +10,11 @@ export default function Upload({ done }: { done: (episode: string) => void }) {
   async function send(file: File) {
     try {
       setJob(null)
+      if (file.size > 700 * 1024 * 1024) throw new Error(`file is ${Math.round(file.size / 1048576)} MB, limit is 700 MB`)
       setMsg('requesting upload URL…')
-      const up = await (await fetch('/api/uploads', { method: 'POST' })).json()
+      const ur = await fetch('/api/uploads', { method: 'POST', body: JSON.stringify({ size: file.size }) })
+      const up = await ur.json()
+      if (!ur.ok) throw new Error(up.error)
       setMsg(`uploading ${(file.size / 1e6).toFixed(0)} MB…`)
       // Locally this is our own endpoint; on Cloud Run it is a GCS resumable session URL.
       const put = await fetch(up.upload_url, { method: 'PUT', body: file, headers: { 'Content-Type': 'video/mp4' } })
@@ -28,10 +31,13 @@ export default function Upload({ done }: { done: (episode: string) => void }) {
       while (j.status === 'queued' || j.status === 'running') {
         setJob(j)
         await new Promise((r) => setTimeout(r, 1500))
-        j = await (await fetch(`/api/jobs/${j.id}`)).json()
+        const pr = await fetch(`/api/jobs/${j.id}`)
+        if (pr.status === 404) throw new Error('job lost: the server restarted while processing. Please upload again.')
+        j = await pr.json()
       }
       setJob(j)
       if (j.status === 'done') done(j.episode)
+      else if (j.error) throw new Error(j.error)
     } catch (e) {
       setMsg(`error: ${(e as Error).message}`)
     }
@@ -40,6 +46,7 @@ export default function Upload({ done }: { done: (episode: string) => void }) {
   return (
     <section className="upload">
       <h3>Analyse a new video</h3>
+      <p className="muted">MP4 up to 60 minutes and 700 MB. H.264 video plays in every browser. Processing a 25 minute episode takes a few minutes; you can leave this page open.</p>
       <input type="file" accept="video/mp4" onChange={(e) => e.target.files?.[0] && send(e.target.files[0])} />
       {msg && <p className="muted">{msg}</p>}
       {job && (

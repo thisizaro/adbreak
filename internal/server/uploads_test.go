@@ -66,6 +66,10 @@ func TestLocalUploadFinalizeAndJob(t *testing.T) {
 	if got := <-ran; got != id {
 		t.Fatalf("ran %q", got)
 	}
+	// Oversized uploads are refused before any bytes move.
+	if code, _ := do("POST", "/api/uploads", []byte(`{"size": 99999999999}`)); code != 413 {
+		t.Fatalf("oversize: %d", code)
+	}
 	// A non-video is rejected at finalize and removed.
 	_, up2 := do("POST", "/api/uploads", nil)
 	id2 := up2["id"].(string)
@@ -77,4 +81,25 @@ func TestLocalUploadFinalizeAndJob(t *testing.T) {
 		t.Fatal("rejected upload not removed")
 	}
 	_ = http.StatusOK
+}
+
+func TestTryBrandRejectsCollidingIDs(t *testing.T) {
+	data, videos := t.TempDir(), t.TempDir()
+	os.MkdirAll(filepath.Join(data, "ep1"), 0o755)
+	os.WriteFile(filepath.Join(data, "ep1", "debug.json"), []byte(`{"episode":"ep1"}`), 0o644)
+	cat := []brands.Brand{{ID: "brand_a", Creatives: []brands.Creative{{ID: "a_30s_bn", Seconds: 30}}}}
+	lib := &library.Library{DataDir: data, VideoDir: videos, Catalogue: func() []brands.Brand { return cat }}
+	runner := jobs.NewRunner(jobs.NewBus(), func(context.Context, jobs.Job, func(string, string)) (string, error) { return "", nil })
+	h := New("t", fstest.MapFS{"index.html": {Data: []byte("x")}}, lib, pipeline.Pacing{}).WithUploads(&Uploads{Target: LocalTarget{}, Runner: runner}).Handler()
+	cases := map[string]string{
+		`{"brand_id":"brand_a","display_name":"A","target_contexts":["x"],"creatives":[{"id":"z_20s","duration_sec":20}]}`:    "already in the catalogue",
+		`{"brand_id":"brand_z","display_name":"Z","target_contexts":["x"],"creatives":[{"id":"a_30s_bn","duration_sec":30}]}`: "already belongs to brand_a",
+	}
+	for body, want := range cases {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("POST", "/api/episodes/ep1/try-brand", strings.NewReader(body)))
+		if rec.Code != 400 || !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("got %d %s, want 400 containing %q", rec.Code, rec.Body.String(), want)
+		}
+	}
 }
