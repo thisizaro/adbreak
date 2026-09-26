@@ -102,10 +102,10 @@ Vertical slice target: 16:00 to 16:30 IST. Feature freeze: 23:00 IST. Submit by 
 - [ ] 4.4 AI break scoring with rationale
 - [ ] 4.5 Semantic per-brand negative check on scenes before and after, uncertain = blocked; ranking with rationale
 - [ ] 4.6 Debug JSON with rejections + funnel counts; timeline, break detail, funnel UI
-- [ ] 4.7 Async upload: signed URL to GCS, job id, polling, stage progress
+- [~] 4.7 Async upload: signed URL to GCS, job id, polling, stage progress
 - [ ] 4.8 AI call cache by content hash + Re-run live
 - [ ] 4.9 Add-a-9th-brand flow in UI
-- [ ] 4.10 Budget guard (max duration, one job at a time, token cap)
+- [~] 4.10 Budget guard: max upload MB + duration and one job at a time done; token cap not done
 - [ ] 4.11 Precompute all 6 episodes on the deployed instance
 
 ### 5. Tests (alongside the code)

@@ -39,6 +39,8 @@ type Config struct {
 	VideoDir    string
 	BrandsPath  string
 	SlateFont   string
+	MaxUploadMB int
+	MaxUploadS  float64
 	Pacing      Pacing
 }
 
@@ -59,6 +61,8 @@ func Load() (Config, error) {
 		VideoDir:    str("VIDEO_DIR", "assets"),
 		BrandsPath:  str("BRANDS_PATH", "assets/brands.json"),
 		SlateFont:   str("SLATE_FONT", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+		MaxUploadMB: integer("MAX_UPLOAD_MB", 700, &errs),
+		MaxUploadS:  float("MAX_UPLOAD_SECONDS", 3600, &errs),
 		Pacing: Pacing{
 			MaxBreaksPerHour: integer("PACING_MAX_BREAKS_PER_HOUR", 6, &errs),
 			MinGap:           dur("PACING_MIN_GAP", 6*time.Minute, &errs),
@@ -92,6 +96,7 @@ func (c Config) Print(w io.Writer) {
 	fmt.Fprintf(w, "  port=%s version=%s\n", c.Port, c.Version)
 	fmt.Fprintf(w, "  database_url=%s gcs_bucket=%q\n", secret(c.DatabaseURL), c.GCSBucket)
 	fmt.Fprintf(w, "  data_dir=%s video_dir=%s brands=%s slate_font=%s\n", c.DataDir, c.VideoDir, c.BrandsPath, c.SlateFont)
+	fmt.Fprintf(w, "  budget guard: max_upload_mb=%d max_upload_seconds=%.0f one job at a time\n", c.MaxUploadMB, c.MaxUploadS)
 	fmt.Fprintf(w, "  gemini_api_key=%s gemini_model=%s gemini_url=%s\n", secret(c.GeminiKey), c.GeminiModel, c.GeminiURL)
 	fmt.Fprintf(w, "  groq_api_key=%s asr_model=%s groq_url=%s\n", secret(c.GroqKey), c.ASRModel, c.GroqURL)
 	p := c.Pacing

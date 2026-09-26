@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Player, { type PlayerHandle } from './Player'
+import Upload from './Upload'
 import { fmt, getEpisode, listEpisodes, loadVMAP, type AdSlot, type Result, type Summary } from './api'
 
 function useRoute() {
@@ -60,6 +61,7 @@ function Library({ open }: { open: (id: string) => void }) {
           </button>
         ))}
       </div>
+      <Upload done={open} />
       {pacing && (
         <section>
           <h3>Pacing rules (config, enforced in code)</h3>

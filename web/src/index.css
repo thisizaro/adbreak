@@ -59,3 +59,5 @@ tr.rej { color: var(--muted); }
 .pacing { display: flex; flex-wrap: wrap; gap: 8px; }
 .pacing div { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; min-width: 120px; }
 .pacing span { color: var(--muted); font-size: 12px; }
+.joblog { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-family: ui-monospace, monospace; font-size: 13px; }
+.upload input { color: var(--muted); }
