@@ -72,7 +72,7 @@ func Load() (Config, error) {
 		GCPProject:  str("GCP_PROJECT", ""),
 		VertexLoc:   str("VERTEX_LOCATION", "global"),
 		JobTokens:   int64(integer("JOB_TOKEN_CAP", 1500000, &errs)),
-		JobsPerDay:  integer("JOBS_PER_DAY", 30, &errs),
+		JobsPerDay:  integer("JOBS_PER_DAY", 15, &errs),
 		GroqKey:     str("GROQ_API_KEY", ""),
 		GroqURL:     str("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
 		ASRModel:    str("ASR_MODEL", "whisper-large-v3"),
