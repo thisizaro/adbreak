@@ -88,6 +88,8 @@ export type Result = {
   candidates: Candidate[]
   asr_provider: string
   ai_provider: string
+  trial?: string
+  trial_brand?: string
 }
 
 export type AdSlot = { offset: number; breakId: string; title: string; duration: number; media: string }

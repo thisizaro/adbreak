@@ -94,6 +94,8 @@ type Result struct {
 	AIProvider  string             `json:"ai_provider"`
 	DecideModel string             `json:"decide_provider,omitempty"`
 	Trial       string             `json:"trial,omitempty"`
+	TrialBrand  string             `json:"trial_brand,omitempty"`
+	TrialKept   []float64          `json:"trial_kept,omitempty"`
 }
 
 func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p Pacing) (Result, error) {
@@ -284,7 +286,7 @@ func (d Deps) placeAll(ctx context.Context, ep Episode, sel []breaks.Candidate, 
 // Rematch re-places an analysed episode's selected breaks against a new
 // catalogue (for example with a brand added at runtime). Where breaks fall does
 // not change; only brand matching re-runs. Nothing about any brand is coded.
-func (d Deps) Rematch(ctx context.Context, ep Episode, base Result, catalogue []brands.Brand, name string) (Result, error) {
+func (d Deps) Rematch(ctx context.Context, ep Episode, base Result, catalogue []brands.Brand, name, newBrand string) (Result, error) {
 	m, err := d.Media(ctx, ep)
 	if err != nil {
 		return Result{}, err
@@ -311,16 +313,69 @@ func (d Deps) Rematch(ctx context.Context, ep Episode, base Result, catalogue []
 	}
 	r := base
 	r.ComputedAt = time.Now().UTC()
+	// Existing brands keep their cached answers; only the new brand is asked about,
+	// so adding a brand never changes how the others were judged.
+	var nb brands.Brand
+	for _, b := range catalogue {
+		if b.ID == newBrand {
+			nb = b
+		}
+	}
+	prior := map[float64]Placement{}
+	for _, b := range base.Breaks {
+		prior[b.T] = b.Placement
+	}
+	byID := map[string]brands.Brand{}
+	for _, b := range catalogue {
+		byID[b.ID] = b
+	}
+	negs := negativeUnion(catalogue)
 	var newlyUnplaced []Placement
-	r.Breaks, newlyUnplaced, err = d.placeAll(ctx, ep, sel, catalogue, tr, sc, base.Pacing)
-	if err != nil {
-		return Result{}, err
+	r.Breaks = nil
+	for _, c := range sel {
+		pl := prior[c.T]
+		extra, err := d.Place(ctx, ep, c.T, []brands.Brand{nb}, tr, base.Pacing.PodSeconds)
+		if err != nil {
+			return Result{}, err
+		}
+		verdicts := append([]brands.Verdict(nil), pl.Verdicts...)
+		for _, v := range extra.Verdicts {
+			if v.BrandID == newBrand {
+				verdicts = append(verdicts, v)
+			}
+		}
+		checks, err := d.Safety(ctx, ep, c.T, negs)
+		if err != nil {
+			return Result{}, err
+		}
+		flags := SafetyFlags(negs, checks, sc, c.T)
+		pl.Verdicts = verdicts
+		pl.Decision = brands.Decide(catalogue, verdicts, flags, base.Pacing.PodSeconds)
+		if pl.Decision.BrandID == "" {
+			newlyUnplaced = append(newlyUnplaced, pl)
+			continue
+		}
+		b := byID[pl.Decision.BrandID]
+		br := Break{T: c.T, Score: c.Score, Rationale: c.Rationale, Placement: pl, BrandName: b.Name,
+			Boundary: nearestBoundary(sc, c.T), Safety: checks, Flags: flags}
+		for _, cr := range b.Creatives {
+			if cr.ID == pl.Decision.CreativeID {
+				cr := cr
+				br.Creative = &cr
+			}
+		}
+		r.Breaks = append(r.Breaks, br)
+	}
+	r.TrialKept = nil
+	for _, c := range sel {
+		r.TrialKept = append(r.TrialKept, c.T)
 	}
 	r.Unplaced = append(append([]Placement(nil), base.Unplaced...), newlyUnplaced...)
 	r.Funnel.Placed = len(r.Breaks)
 	r.Funnel.Suppressed = len(r.Unplaced)
 	r.Funnel.Considered = r.Funnel.Placed + r.Funnel.Suppressed
 	r.Trial = name
+	r.TrialBrand = newBrand
 	r.normalize()
 	b, _ := json.MarshalIndent(r, "", "  ")
 	return r, os.WriteFile(filepath.Join(ep.Dir, name+".json"), b, 0o644)
