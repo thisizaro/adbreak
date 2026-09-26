@@ -81,7 +81,7 @@ Vertical slice target: 16:00 to 16:30 IST. Feature freeze: 23:00 IST. Submit by 
 ### 2. Foundation
 - [x] 2.1 Config printed at startup, health endpoint, embedded SPA with fallback
 - [ ] 2.2 Postgres schema + migrations (jobs, stage results, AI call cache)
-- [ ] 2.3 In-process event bus + job runner with stage progress
+- [x] 2.3 In-process event bus + job runner with stage progress
 - [ ] 2.4 Storage interface (local disk in dev, GCS in prod)
 - [~] 2.5 Dockerfile (debian-slim + ffmpeg + fonts) built and run locally; deploy pending
 
@@ -98,10 +98,10 @@ Vertical slice target: 16:00 to 16:30 IST. Feature freeze: 23:00 IST. Submit by 
 ### 4. Depth
 - [x] 4.1 Scene segmentation: histogram + transcript propose, AI describes and refines
 - [x] 4.2 Scene list view + scenes in debug JSON
-- [ ] 4.3 Gemini audio check on surviving candidates (second speech signal)
-- [ ] 4.4 AI break scoring with rationale
-- [ ] 4.5 Semantic per-brand negative check on scenes before and after, uncertain = blocked; ranking with rationale
-- [ ] 4.6 Debug JSON with rejections + funnel counts; timeline, break detail, funnel UI
+- [x] 4.3 Gemini audio check on surviving candidates (second speech signal)
+- [x] 4.4 AI break scoring with rationale
+- [x] 4.5 Semantic per-brand negative check on scenes before and after, uncertain = blocked; ranking with rationale
+- [x] 4.6 Debug JSON with rejections + funnel counts; timeline, break detail, funnel UI
 - [~] 4.7 Async upload: signed URL to GCS, job id, polling, stage progress
 - [ ] 4.8 AI call cache by content hash + Re-run live
 - [ ] 4.9 Add-a-9th-brand flow in UI
