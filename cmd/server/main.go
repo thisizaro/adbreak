@@ -7,13 +7,18 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
+	"github.com/thisizaro/adbreak/internal/ai"
 	"github.com/thisizaro/adbreak/internal/brands"
 	"github.com/thisizaro/adbreak/internal/config"
+	"github.com/thisizaro/adbreak/internal/jobs"
 	"github.com/thisizaro/adbreak/internal/library"
+	"github.com/thisizaro/adbreak/internal/pipeline"
 	"github.com/thisizaro/adbreak/internal/server"
+	"github.com/thisizaro/adbreak/internal/speech"
 	"github.com/thisizaro/adbreak/web"
 )
 
@@ -37,14 +42,42 @@ func main() {
 	lib := &library.Library{DataDir: cfg.DataDir, VideoDir: cfg.VideoDir, Font: cfg.SlateFont,
 		Catalogue: func() []brands.Brand { return catalogue }}
 
-	srv := &http.Server{
-		Addr:              ":" + cfg.Port,
-		Handler:           server.New(cfg.Version, static, lib, cfg.PipelinePacing()).Handler(),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	deps := pipeline.Deps{
+		ASR:            &speech.Groq{BaseURL: cfg.GroqURL, APIKey: cfg.GroqKey, Model: cfg.ASRModel, Language: "bn"},
+		AI:             &ai.Gemini{BaseURL: cfg.GeminiURL, APIKey: cfg.GeminiKey, Model: cfg.GeminiModel},
+		ShotThreshold:  0.3,
+		ChunkSeconds:   600,
+		OverlapSeconds: 5,
+		ASRParallelism: 3,
+	}
+	runner := jobs.NewRunner(jobs.NewBus(), func(ctx context.Context, id string, progress func(stage, msg string)) error {
+		video, err := lib.VideoPath(id)
+		if err != nil {
+			return err
+		}
+		ep := pipeline.Episode{ID: id, Video: video, Dir: filepath.Join(cfg.DataDir, id)}
+		if err := os.MkdirAll(ep.Dir, 0o755); err != nil {
+			return err
+		}
+		d := deps
+		d.Progress = progress
+		_, err = d.Run(ctx, ep, catalogue, cfg.PipelinePacing())
+		return err
+	})
+	runner.Start(ctx, 8)
+
+	handler := server.New(cfg.Version, static, lib, cfg.PipelinePacing()).WithUploads(&server.Uploads{
+		VideoDir: cfg.VideoDir, MaxBytes: int64(cfg.MaxUploadMB) << 20, MaxDuration: cfg.MaxUploadS, Runner: runner,
+	}).Handler()
+
+	srv := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 
 	go func() {
 		log.Printf("listening on :%s", cfg.Port)

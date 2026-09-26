@@ -17,7 +17,7 @@ flowchart LR
     config["config<br/>env, printed at startup"]
     library["library<br/>read side: results, video paths, slates on demand"]
     pipeline["pipeline<br/>stage order + per-stage JSON cache"]
-    jobs["jobs<br/>async runner + event bus (planned)"]
+    jobs["jobs<br/>async runner + in-process event bus<br/>(one worker = one job at a time)"]
     store["store<br/>Postgres repo (planned)"]
     blob["blob<br/>local disk | GCS (planned; local disk today)"]
     media["media<br/>ffprobe, shots, audio chunks, frames, clips"]
@@ -33,7 +33,8 @@ flowchart LR
   server --> library
   server --> manifest
   library --> slates
-  jobs -. planned .-> pipeline
+  server --> jobs
+  jobs --> pipeline
   pipeline --> media & speech & scenes & breaks & brands
   pipeline --> ai
   jobs -.-> store
@@ -100,7 +101,7 @@ flowchart TD
   PICK --> DBG
 ```
 
-## 4. Upload and job flow (planned)
+## 4. Upload and job flow (built with local upload URL; GCS signed URL planned)
 
 Cloud Run caps request bodies at 32 MiB and a Cloudflare proxy would cut requests at 100 s,
 so uploads go straight to GCS and processing is always async (LOG 13:35).
@@ -113,11 +114,11 @@ sequenceDiagram
   participant J as job runner
   participant D as Postgres
   B->>A: POST /api/uploads
-  A->>G: create signed resumable URL
+  A->>G: create signed resumable URL (local dev: /api/uploads/{id} on this server)
   A-->>B: upload URL + video id
   B->>G: PUT video bytes
   B->>A: POST /api/jobs {video id}
-  A->>D: insert job (queued)
+  A->>D: insert job (queued) (today: in-memory map; Postgres planned)
   A-->>B: job id (immediately)
   A->>J: event job.created
   loop each stage

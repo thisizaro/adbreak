@@ -21,10 +21,17 @@ type Server struct {
 	static  fs.FS
 	lib     *library.Library
 	pacing  pipeline.Pacing
+	up      *Uploads
 }
 
 func New(version string, static fs.FS, lib *library.Library, pacing pipeline.Pacing) *Server {
 	return &Server{version: version, static: static, lib: lib, pacing: pacing}
+}
+
+// WithUploads enables uploads and async jobs.
+func (s *Server) WithUploads(u *Uploads) *Server {
+	s.up = u
+	return s
 }
 
 func (s *Server) Handler() http.Handler {
@@ -34,6 +41,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/episodes", s.episodes)
 	mux.HandleFunc("GET /api/episodes/{id}", s.episode)
 	mux.HandleFunc("GET /api/episodes/{id}/vmap.xml", s.vmap)
+	mux.HandleFunc("POST /api/uploads", s.createUpload)
+	mux.HandleFunc("PUT /api/uploads/{id}", s.putUpload)
+	mux.HandleFunc("POST /api/jobs", s.createJob)
+	mux.HandleFunc("GET /api/jobs/{id}", s.getJob)
 	mux.HandleFunc("GET /api/impression", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /media/episodes/{file}", s.video)
 	mux.HandleFunc("GET /media/slates/{file}", s.slate)
