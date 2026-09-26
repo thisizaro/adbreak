@@ -76,7 +76,10 @@ flowchart TD
   SD --> SCX[scene context: +0.1 within -15s/+20s<br/>of a scene start, x0.6 mid-scene]
   S --> SCX
   SCX --> DP[pacing DP<br/>max total score s.t. min gap max 240s or 0.2 x duration,<br/>budget from per-hour rate and ad load, min score]
-  DP --> B[brand match per selected break]
+  DP --> FC{final check per selected cut:<br/>two models hear +-3 s, both must say no speech}
+  FC -- rejected --> DP
+  FC -- clear --> B[brand match per selected break]
+  B -- no brand can take it --> DP
   B --> M[VMAP + VAST + debug JSON]
 ```
 
@@ -104,7 +107,9 @@ flowchart TD
   FL --> H
   Q --> H{code: any yes or unsure from placement model<br/>in either scene, or any independent flag?}
   H -- yes --> BLK[blocked, reason recorded]
-  H -- no --> RANK[AI ranks eligible brands by dominant<br/>activity vs target_contexts, with rationale]
+  H -- no --> DOM{code: model says fit is with the<br/>dominant activity, and fit at least 0.35?}
+  DOM -- no --> UNFIT[unfit, reason recorded]
+  DOM -- yes --> RANK[highest fit wins, with rationale]
   RANK --> PICK[top brand + creative that fits the slot]
   BLK --> DBG[debug JSON]
   PICK --> DBG
