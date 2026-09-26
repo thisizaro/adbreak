@@ -103,3 +103,38 @@ func TestTryBrandRejectsCollidingIDs(t *testing.T) {
 		}
 	}
 }
+
+func TestDeleteUpload(t *testing.T) {
+	data, videos := t.TempDir(), t.TempDir()
+	for _, id := range []string{"up_123", "mohanagar"} {
+		os.MkdirAll(filepath.Join(data, id), 0o755)
+		os.WriteFile(filepath.Join(data, id, "debug.json"), []byte(`{}`), 0o644)
+		os.WriteFile(filepath.Join(videos, id+".mp4"), []byte("v"), 0o644)
+	}
+	lib := &library.Library{DataDir: data, VideoDir: videos, Catalogue: func() []brands.Brand { return nil }}
+	runner := jobs.NewRunner(jobs.NewBus(), func(context.Context, jobs.Job, func(string, string)) (string, error) { return "", nil })
+	h := New("t", fstest.MapFS{"index.html": {Data: []byte("x")}}, lib, pipeline.Pacing{}).WithUploads(&Uploads{Target: LocalTarget{}, Runner: runner}).Handler()
+	del := func(id string) int {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("DELETE", "/api/episodes/"+id, nil))
+		return rec.Code
+	}
+	if c := del("mohanagar"); c != 403 {
+		t.Fatalf("sample delete: %d", c)
+	}
+	if c := del("up_123"); c != 200 {
+		t.Fatalf("upload delete: %d", c)
+	}
+	if _, err := os.Stat(filepath.Join(data, "up_123")); !os.IsNotExist(err) {
+		t.Fatal("cache dir not removed")
+	}
+	if _, err := os.Stat(filepath.Join(videos, "up_123.mp4")); !os.IsNotExist(err) {
+		t.Fatal("video not removed")
+	}
+	if _, err := os.Stat(filepath.Join(videos, "mohanagar.mp4")); err != nil {
+		t.Fatal("sample touched")
+	}
+	if c := del("up_123"); c != 404 {
+		t.Fatalf("second delete: %d", c)
+	}
+}

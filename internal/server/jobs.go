@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/thisizaro/adbreak/internal/jobs"
+	"github.com/thisizaro/adbreak/internal/library"
 	"github.com/thisizaro/adbreak/internal/media"
 )
 
@@ -149,4 +150,23 @@ func (s *Server) getJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, j)
+}
+
+// deleteUpload removes an uploaded video and all its cached analysis.
+func (s *Server) deleteUpload(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if s.up != nil && s.up.Runner.Busy(id) {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "this video is still being analysed; delete it when the job finishes"})
+		return
+	}
+	switch err := s.lib.DeleteUpload(id); {
+	case errors.Is(err, library.ErrNotDeletable):
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+	case errors.Is(err, library.ErrNotFound):
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+	case err != nil:
+		fail(w, err)
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"deleted": id})
+	}
 }

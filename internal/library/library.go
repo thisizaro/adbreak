@@ -254,3 +254,30 @@ func (l *Library) TrialAll(name string) ([]EpisodeTrial, error) {
 	}
 	return out, nil
 }
+
+var uploadedID = regexp.MustCompile(`^up_[0-9]+$`)
+
+// ErrNotDeletable is returned for anything that is not an uploaded video.
+var ErrNotDeletable = errors.New("only uploaded videos can be deleted")
+
+// DeleteUpload permanently removes an uploaded video and every cached
+// analysis artifact for it. Sample episodes cannot be deleted.
+func (l *Library) DeleteUpload(id string) error {
+	if !uploadedID.MatchString(id) {
+		return ErrNotDeletable
+	}
+	video := filepath.Join(l.VideoDir, id+".mp4")
+	dir := filepath.Join(l.DataDir, id)
+	_, vErr := os.Stat(video)
+	_, dErr := os.Stat(dir)
+	if vErr != nil && dErr != nil {
+		return ErrNotFound
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	if err := os.Remove(video); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}

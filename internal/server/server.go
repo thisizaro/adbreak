@@ -40,6 +40,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/config", s.config)
 	mux.HandleFunc("GET /api/episodes", s.episodes)
 	mux.HandleFunc("GET /api/episodes/{id}", s.episode)
+	mux.HandleFunc("DELETE /api/episodes/{id}", s.deleteUpload)
 	mux.HandleFunc("GET /api/episodes/{id}/vmap.xml", s.vmap)
 	mux.HandleFunc("POST /api/episodes/{id}/try-brand", s.tryBrand)
 	mux.HandleFunc("GET /api/episodes/{id}/trials/{name}", s.trial)
