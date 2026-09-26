@@ -74,22 +74,24 @@ Brands are loaded from the catalogue at runtime. A ninth brand can be added from
 
 ## Results on the sample episodes
 
-All six episodes from the hackathon kit, processed by the deployed pipeline (v0.2.0, Gemini on Vertex AI).
+All six episodes from the hackathon kit, processed by the deployed pipeline (v0.3.0, Gemini on Vertex AI).
 
-| Episode | Length | Shots | Scenes | Mid-dialogue cuts caught by the audio check | Safe breaks found | Placed | Suppressed for brand safety |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Bhojon Bilashi | 20:27 | 428 | 13 | 23 | 2 | **2** (Brand E, Brand A) | 0 |
-| Feluda | 25:35 | 361 | 12 | 9 | 5 | **1** (Brand G) | 4 |
-| Indubala Bhaater Hotel | 25:54 | 149 | 11 | 13 | 3 | **0** | 3 |
-| Mandaar | 39:09 | 353 | 33 | 28 | 8 | **3** (Brand A, E, C) | 5 |
-| Mohanagar | 23:16 | 211 | 18 | 10 | 4 | **2** (Brand D, E) | 2 |
-| Money Honey | 21:42 | 130 | 17 | 3 | 2 | **2** (Brand G, D) | 0 |
-| **Total** | | | **104** | **86** | **24** | **10** | **14** |
+| Episode | Length | Shots | Scenes | Cut by the batched audio check | Cut by the final per-break check | Placed | Held back |
+|---|---:|---:|---:|---:|---:|---|---:|
+| Bhojon Bilashi | 20:27 | 428 | 13 | 23 | 3 | **1** (Brand G at 2:56) | 0 |
+| Feluda | 25:35 | 361 | 12 | 9 | 4 | **1** (Brand G at 14:17) | 4 |
+| Indubala Bhaater Hotel | 25:53 | 149 | 11 | 13 | 2 | **0** | 1 |
+| Mandaar | 39:09 | 353 | 33 | 28 | 5 | **1** (Brand A at 7:48) | 10 |
+| Mohanagar | 23:16 | 211 | 18 | 10 | 5 | **1** (Brand D at 9:57) | 5 |
+| Money Honey | 21:41 | 130 | 17 | 3 | 4 | **1** (Brand D at 9:19) | 0 |
+| **Total** | | | **104** | **86** | **23** | **5** | **20** |
 
-Two numbers matter most:
+What the numbers say:
 
-- **86 cuts that the transcript said were silent were actually mid-dialogue.** Whisper timestamps on Bengali are coarse (segments cover about 93% of runtime and some "words" last up to 29 seconds), so a second, independent check listens to the audio around each surviving cut. Without it, all 86 would have been eligible.
-- **14 speech-safe breaks were suppressed because no brand may appear there.** Indubala Bhaater Hotel gets zero ads on purpose. Every clean pause in it sits beside mourning. At 10:23 the safety model's evidence reads *"a body wrapped in a cloth is being transported on a cart, which strongly implies a funeral context"*. It is a story about a food hotel, and this is exactly the "food ad after a funeral" case the brief says must never happen. The word "funeral" is never spoken; it is caught from the pictures.
+- **86 cuts that the transcript said were silent were actually mid-dialogue**, caught by a model listening to the audio around each cut. Whisper timestamps on Bengali are coarse (segments cover about 93% of runtime, some "words" last up to 29 seconds) and on long chunks it can drop dialogue entirely: in Mohanagar it returned nothing for 27 seconds of conversation.
+- **23 more were caught by the final check.** Every break the pacing optimizer selects is re-heard on its own by two models (a focused question about 3 seconds either side of the cut). Anything but a clear "no speech" from both rejects it and the optimizer picks again. This is what caught the Mohanagar case: a manual review found a break at 5:17 cutting into *"এমপি সাহেবের পিএস টিটু সাহেবের সাথে আপনার একটা অ্যাপয়েন্টমেন্ট ছিল"*, which the long-form transcript had dropped and the batched check had missed.
+- **20 speech-safe breaks were held back** because no brand may appear there, or no brand matches what the scene is mainly about. Indubala Bhaater Hotel gets zero ads on purpose. Its one remaining clean pause, at 14:12, is blocked for every brand; the independent safety model's evidence reads *"The characters are dressed in white, which is traditional mourning attire in Bengali culture, and the setting appears to be a place of mourning"*. (Another pause, at 10:23 beside a body carried on a cart, was already removed by the final speech check.) It is a story about a food hotel, and this is exactly the "food ad after a funeral" case the brief says must never happen. The word "funeral" is never spoken; it is caught from the pictures.
+- **Each of the 5 placements was reviewed by hand**: both hearings "no" at the cut, the last transcribed word 1.4 to 3.3 seconds before it, the audio at the cut a pause, music or street ambience, and the frames either side matching the stated scenes and brand (travel over drone shots of the town, travel over a mountain lake, food over a plate of fried fish being served, telecom right after a phone call, twice).
 
 <p align="center"><img src="docs/img/suppressed.png" alt="Three suppressed breaks in Indubala Bhaater Hotel, each blocked for all 8 brands because an independent check flagged funeral context" width="820"></p>
 
@@ -126,7 +128,8 @@ flowchart TD
 2. **Scenes.** One keyframe per shot. Colour-histogram jumps with no speech across the cut propose scene starts; Gemini, given the keyframes and transcript in windows of 80 shots, confirms the starts and describes each scene. If a window's model call fails, the heuristic proposals stand in for it.
 3. **Where.** Every shot cut is a candidate. Code rejects anything inside the head or tail margin or within 500 ms of any transcribed speech. Gemini then hears 10 seconds of audio around each survivor with frames from either side; *yes* or *unsure* on "is anyone mid-utterance" rejects it.
 4. **Whether.** Surviving cuts get a natural-break score, nudged up near scene starts and down mid-scene. A dynamic program picks the highest-scoring set that respects the minimum gap, the per-hour rate and the ad-load cap, and drops anything below a minimum score. There is no target number of breaks.
-5. **What.** For each selected break, one model scores every brand's fit and answers every negative context before and after the break, while a second model independently checks every negative context in the catalogue over a wider window. Code decides. If no brand can take a break, it is marked with the reason and the DP re-selects so the next-best break gets the slot.
+5. **Final check.** Each selected break is re-heard on its own by two models. Anything but a clear "no speech" from both rejects it and the DP re-selects.
+6. **What.** For each surviving break, one model scores every brand's fit, says whether the fit is with the scene's *dominant* activity or only something incidental, and answers every negative context before and after the break, while a second model independently checks every negative context in the catalogue over a wider window. Code decides. If no brand can take a break, it is marked with the reason and the DP re-selects so the next-best break gets the slot.
 
 ## AI proposes, code guarantees
 
@@ -134,7 +137,8 @@ The model supplies judgment. Rules that the brief treats as non-negotiable are e
 
 | Rule | Enforced by | Model's role |
 |---|---|---|
-| Never cut inside speech | `breaks.Filter`: transcript segment or word span widened by 500 ms | Second opinion only: can reject, never approve what code rejected |
+| Never cut inside speech | `breaks.Filter`: transcript segment or word span widened by 500 ms; then the final check needs a clear "no" from two models | Can reject, never approve what code rejected |
+| Dominant scene activity wins | `brands.Decide`: a brand is only eligible if the model says its fit is with the dominant activity (missing answer counts as no) and fit ≥ 0.35 | Supplies the judgment; code applies the rule |
 | Pacing (gap, per hour, ad load, head, tail) | `breaks.Select` (DP) and `breaks.MaxBreaks` | None |
 | Negative contexts are a hard block | `brands.Decide` | Supplies evidence; code applies the rule |
 | New brands need no code | Catalogue loaded at runtime; cache keyed by catalogue hash | Reads whatever brands it is given |
@@ -355,13 +359,13 @@ The demo URL is public, so spending is bounded in code, not only by alerts.
 | Low media resolution | About 266 tokens per image instead of 1,102 |
 | Cache | Every stage's output is cached; the catalogue hash is part of the placement cache key |
 
-Measured cost: analysing all six episodes from scratch took roughly 1 million tokens across about 120 model calls, mostly on Flash-Lite, which is well under 1 USD at list prices. Re-running an analysed episode costs nothing.
+Measured cost: analysing all six episodes from scratch took roughly 1.3 million tokens across about 270 model calls, mostly on Flash-Lite, which is about 1 USD at list prices. Re-running an analysed episode costs nothing.
 
 ## Testing
 
 ```bash
-go test -race ./...   # 34 tests: speech guard, pacing DP and scaling, negative-context
-                      # decision (including missing answers, independent flags, a 9th brand),
+go test -race ./...   # 39 tests: speech guard, final speech check, pacing DP and scaling, negative-context
+                      # decision (missing answers, independent flags, dominant activity, a 9th brand),
                       # safety flags, VMAP/VAST well-formedness, Whisper chunk merge,
                       # job runner and daily cap, HTTP routes, range clamping, upload flow
 ```
@@ -373,8 +377,9 @@ GitHub Actions runs `go vet`, `go test -race` (with ffmpeg installed) and the fr
 Named honestly, with measurements where we have them.
 
 - **Scenes are built from shot-cut clustering.** Across the six episodes: 104 scenes, median 1.0 minute, but some run long (up to 9.7 minutes in Indubala Bhaater Hotel, whose soft transitions yield only 149 shots). Finer scene units would give brand matching more precise context.
-- **No dedicated voice-activity detector.** Speech detection is Whisper timestamps plus the AI audio check. The common pattern is transcript timestamps plus a VAD plus sentence-boundary rules; we have functional equivalents of two of the three.
-- **Break counts are low by design.** Dialogue-dense episodes leave few speech-safe cuts, and some of those sit next to content no brand may appear against.
+- **No dedicated voice-activity detector.** Speech detection is Whisper timestamps plus two AI audio checks. The common pattern is transcript timestamps plus a VAD plus sentence-boundary rules; we have functional equivalents of two of the three.
+- **Long-form transcription can drop dialogue.** Whisper on 10-minute chunks returned nothing for 27 seconds of conversation in Mohanagar. The final per-break check catches this for every placed break, but the transcript itself still has the hole. Planned: re-transcribe long, loud gaps on short windows, which recovered that dialogue in testing. Short-window Whisper is not used as a gate because it hallucinates repeated words over music.
+- **Break counts are low by design.** One break per episode on five of six. Dialogue-dense episodes leave few speech-safe cuts; some sit next to content no brand may appear against, and some have no brand that fits what the scene is mainly about.
 - **Region.** The service runs in us-central1. For viewers in India, seeking takes 1 to 4 seconds; asia-south1 (Mumbai) is on the same pricing tier and would be closer.
 - **Single instance, in-memory job state.** Results survive restarts (they live in the bucket); queued jobs and the daily counter do not. An upload whose tab is closed can be stopped when the idle instance scales down.
 - **Video passes through the app.** Serving media from signed Cloud Storage URLs or a CDN would make seeking faster.
