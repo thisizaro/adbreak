@@ -30,7 +30,7 @@ export default function App() {
         </a>
         <span className="tag">context-aware ad breaks for Bengali drama</span>
       </header>
-      {m ? <Episode key={path} id={m[1]} trialName={trialParam} /> : <Library open={(id) => go(`/episodes/${id}`)} go={go} />}
+      {m ? <Episode key={path} id={m[1]} trialName={trialParam} onDeleted={() => go('/')} /> : <Library open={(id) => go(`/episodes/${id}`)} go={go} />}
     </div>
   )
 }
@@ -86,7 +86,7 @@ function Library({ open, go }: { open: (id: string) => void; go: (p: string) => 
   )
 }
 
-function Episode({ id, trialName }: { id: string; trialName?: string }) {
+function Episode({ id, trialName, onDeleted }: { id: string; trialName?: string; onDeleted: () => void }) {
   const [base, setBase] = useState<Result | null>(null)
   const [trial, setTrial] = useState<{ res: Result; name: string } | null>(null)
   const [slots, setSlots] = useState<AdSlot[]>([])
@@ -294,10 +294,39 @@ function Episode({ id, trialName }: { id: string; trialName?: string }) {
 
       <TryBrand id={id} onResult={showTrial} onWatch={(t) => player.current?.seek(Math.max(0, t - 6))} />
 
+      {id.startsWith('up_') && <DeleteUpload id={id} onDeleted={onDeleted} />}
+
       <section className="downloads">
         <a href={`/api/episodes/${id}/vmap.xml${trial ? `?trial=${trial.name}` : ''}`} target="_blank">VMAP manifest</a>
         <a href={`/api/episodes/${id}`} target="_blank">debug JSON</a>
       </section>
     </main>
+  )
+}
+
+function DeleteUpload({ id, onDeleted }: { id: string; onDeleted: () => void }) {
+  const [err, setErr] = useState('')
+  async function del() {
+    const ok = confirm(
+      'This permanently deletes the uploaded video and all of its cached analysis (transcript, scenes, AI answers, breaks).\n\n' +
+        'Uploading the same file again runs the whole pipeline from scratch, so results can differ slightly between runs.',
+    )
+    if (!ok) return
+    const r = await fetch(`/api/episodes/${id}`, { method: 'DELETE' })
+    if (r.ok) onDeleted()
+    else setErr((await r.json()).error ?? `HTTP ${r.status}`)
+  }
+  return (
+    <section className="danger">
+      <h3>Delete this upload</h3>
+      <p className="muted">
+        Removes the video and every cached analysis result for it. Re-uploading the same file starts from scratch with no cache, so AI answers and the chosen breaks may
+        differ slightly. Sample episodes cannot be deleted.
+      </p>
+      <button className="danger-btn" onClick={del}>
+        Delete video and cached results
+      </button>
+      {err && <p className="err">{err}</p>}
+    </section>
   )
 }

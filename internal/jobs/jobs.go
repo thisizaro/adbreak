@@ -209,3 +209,15 @@ func (r *Runner) execute(ctx context.Context, id string) {
 		}
 	})
 }
+
+// Busy reports whether a queued or running job targets this episode.
+func (r *Runner) Busy(episode string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, j := range r.jobs {
+		if j.Episode == episode && (j.Status == Queued || j.Status == Running) {
+			return true
+		}
+	}
+	return false
+}
