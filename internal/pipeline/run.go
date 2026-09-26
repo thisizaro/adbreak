@@ -57,9 +57,11 @@ type Funnel struct {
 	Candidates     int `json:"candidates"`
 	PassHardFilter int `json:"pass_hard_filters"`
 	PassAIJudge    int `json:"pass_ai_speech_check"`
+	CaughtByAudio  int `json:"caught_by_ai_audio_check"` // cleared by Whisper, rejected by the AI audio check
 	BreakBudget    int `json:"break_budget"`
-	Selected       int `json:"selected"`
+	Considered     int `json:"considered_for_placement"` // = placed + suppressed
 	Placed         int `json:"placed"`
+	Suppressed     int `json:"suppressed_for_brand_safety"` // no brand could take it (blocked or no fit)
 }
 
 type Break struct {
@@ -85,7 +87,7 @@ type Result struct {
 	Effective   Effective          `json:"effective_pacing"`
 	Funnel      Funnel             `json:"funnel"`
 	Breaks      []Break            `json:"breaks"`
-	Unplaced    []Placement        `json:"unplaced,omitempty"`
+	Unplaced    []Placement        `json:"unplaced"`
 	Candidates  []breaks.Candidate `json:"candidates"`
 	ASRProvider string             `json:"asr_provider"`
 	AIProvider  string             `json:"ai_provider"`
@@ -132,6 +134,7 @@ func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p P
 		return Result{}, err
 	}
 	r.Funnel.PassAIJudge = countLive(cands)
+	r.Funnel.CaughtByAudio = r.Funnel.PassHardFilter - r.Funnel.PassAIJudge
 	var sceneStarts []float64
 	for _, s := range sc[1:] {
 		sceneStarts = append(sceneStarts, s.Start)
@@ -147,7 +150,6 @@ func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p P
 	const maxRounds = 4
 	for round := 0; round < maxRounds; round++ {
 		picked := breaks.Select(cands, breaks.Limits{MaxBreaks: budget, MinGap: sp.MinGap, MinScore: p.MinScore})
-		r.Funnel.Selected = len(picked)
 		var sel []breaks.Candidate
 		for _, i := range picked {
 			sel = append(sel, cands[i])
@@ -172,7 +174,10 @@ func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p P
 		d.progress("select", "round %d: %d break(s) had no eligible brand, re-selecting", round+1, len(unplaced))
 	}
 	r.Funnel.Placed = len(r.Breaks)
+	r.Funnel.Suppressed = len(r.Unplaced)
+	r.Funnel.Considered = r.Funnel.Placed + r.Funnel.Suppressed
 	r.Candidates = cands
+	r.normalize()
 
 	b, _ := json.MarshalIndent(r, "", "  ")
 	return r, os.WriteFile(filepath.Join(ep.Dir, "debug.json"), b, 0o644)
@@ -295,7 +300,26 @@ func (d Deps) Rematch(ctx context.Context, ep Episode, base Result, catalogue []
 	}
 	r.Unplaced = append(append([]Placement(nil), base.Unplaced...), newlyUnplaced...)
 	r.Funnel.Placed = len(r.Breaks)
+	r.Funnel.Suppressed = len(r.Unplaced)
+	r.Funnel.Considered = r.Funnel.Placed + r.Funnel.Suppressed
 	r.Trial = name
+	r.normalize()
 	b, _ := json.MarshalIndent(r, "", "  ")
 	return r, os.WriteFile(filepath.Join(ep.Dir, name+".json"), b, 0o644)
+}
+
+// normalize makes empty lists encode as [] rather than null in the debug JSON.
+func (r *Result) normalize() {
+	if r.Breaks == nil {
+		r.Breaks = []Break{}
+	}
+	if r.Unplaced == nil {
+		r.Unplaced = []Placement{}
+	}
+	if r.Scenes == nil {
+		r.Scenes = []scenes.Scene{}
+	}
+	if r.Candidates == nil {
+		r.Candidates = []breaks.Candidate{}
+	}
 }

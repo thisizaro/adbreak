@@ -78,7 +78,7 @@ type Decision struct {
 	Fit        float64           `json:"fit,omitempty"`
 	Rationale  string            `json:"rationale,omitempty"`
 	Blocked    map[string]string `json:"blocked"`
-	Eligible   []string          `json:"eligible"`
+	Unblocked  []string          `json:"unblocked"`
 }
 
 // Flags are negative contexts raised by signals independent of the placement
@@ -91,7 +91,7 @@ func Decide(catalogue []Brand, verdicts []Verdict, flags Flags, podSeconds float
 	for _, v := range verdicts {
 		byID[v.BrandID] = v
 	}
-	d := Decision{Blocked: map[string]string{}}
+	d := Decision{Blocked: map[string]string{}, Unblocked: []string{}}
 	type cand struct {
 		b Brand
 		v Verdict
@@ -111,7 +111,7 @@ func Decide(catalogue []Brand, verdicts []Verdict, flags Flags, podSeconds float
 			d.Blocked[b.ID] = reason
 			continue
 		}
-		d.Eligible = append(d.Eligible, b.ID)
+		d.Unblocked = append(d.Unblocked, b.ID)
 		if v.Fit >= MinFit {
 			ok = append(ok, cand{b, v})
 		}

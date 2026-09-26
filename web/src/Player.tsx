@@ -86,6 +86,15 @@ const Player = forwardRef<PlayerHandle, Props>(function Player({ src, slots, dur
         {active && (
           <div className="adbadge">
             Ad: {active.title} · {adLeft}s · resumes at {fmt(active.offset)}
+            <button
+              className="skip"
+              onClick={() => {
+                const a = ad.current
+                if (a && isFinite(a.duration)) a.currentTime = a.duration - 0.05
+              }}
+            >
+              Skip (demo)
+            </button>
           </div>
         )}
       </div>
@@ -95,7 +104,20 @@ const Player = forwardRef<PlayerHandle, Props>(function Player({ src, slots, dur
           <div key={t} className="scenetick" style={{ left: `${(t / duration) * 100}%` }} />
         ))}
         {slots.map((s) => (
-          <div key={s.breakId} className="marker" style={{ left: `${(s.offset / duration) * 100}%` }} title={`${s.title} at ${fmt(s.offset)}`} />
+          <div
+            key={s.breakId}
+            className="marker"
+            style={{ left: `${(s.offset / duration) * 100}%` }}
+            title={`${s.title} at ${fmt(s.offset)}: click to watch from 6s before`}
+            onClick={() => {
+              for (const x of slots) if (x.offset >= s.offset) played.current.delete(x.breakId)
+              lastT.current = Math.max(0, s.offset - 6)
+              if (content.current) {
+                content.current.currentTime = lastT.current
+                content.current.play().catch(() => {})
+              }
+            }}
+          />
         ))}
       </div>
     </div>
