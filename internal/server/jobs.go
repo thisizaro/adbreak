@@ -33,8 +33,20 @@ func (s *Server) createUpload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "uploads disabled"})
 		return
 	}
+	var req struct {
+		Size int64 `json:"size"`
+	}
+	_ = json.NewDecoder(io.LimitReader(r.Body, 1024)).Decode(&req)
+	if s.up.Runner.CapReached() {
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": jobs.ErrDailyCap.Error()})
+		return
+	}
+	if req.Size > s.up.MaxBytes {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": fmt.Sprintf("file is %d MB, limit is %d MB", req.Size>>20, s.up.MaxBytes>>20)})
+		return
+	}
 	id := fmt.Sprintf("up_%d", time.Now().UnixNano())
-	target, err := s.up.Target.Begin(r.Context(), id, baseURL(r))
+	target, err := s.up.Target.Begin(r.Context(), id, baseURL(r), req.Size)
 	if err != nil {
 		fail(w, err)
 		return

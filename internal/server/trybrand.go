@@ -43,6 +43,14 @@ func (s *Server) tryBrand(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("brand_id %q is already in the catalogue", b.ID)})
 			return
 		}
+		for _, ec := range existing.Creatives {
+			for _, c := range b.Creatives {
+				if c.ID == ec.ID {
+					writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("creative id %q already belongs to %s; use a new id", c.ID, existing.ID)})
+					return
+				}
+			}
+		}
 	}
 	canon, _ := json.Marshal(b)
 	payload, _ := json.Marshal(map[string]any{"brand": b, "trial": fmt.Sprintf("trial_%x", sha256.Sum256(canon))[:18]})

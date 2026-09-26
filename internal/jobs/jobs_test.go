@@ -84,3 +84,34 @@ func TestDailyCap(t *testing.T) {
 		t.Fatalf("cap should roll over after 24h: %v", err)
 	}
 }
+
+func TestPingRunsOnlyWhileJobExecutes(t *testing.T) {
+	var pings atomic.Int32
+	release := make(chan struct{})
+	r := NewRunner(NewBus(), func(context.Context, Job, func(string, string)) (string, error) { <-release; return "", nil })
+	r.Ping, r.PingEvery = func() { pings.Add(1) }, 10*time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r.Start(ctx, 2)
+	j, _ := r.Submit("ep")
+	time.Sleep(60 * time.Millisecond)
+	close(release)
+	wait(t, r, j.ID, Done)
+	during := pings.Load()
+	time.Sleep(50 * time.Millisecond)
+	if during < 3 || pings.Load() != during {
+		t.Fatalf("pings during=%d after=%d", during, pings.Load())
+	}
+}
+
+func TestCapReached(t *testing.T) {
+	r := NewRunner(NewBus(), func(context.Context, Job, func(string, string)) (string, error) { return "", nil })
+	r.PerDay = 1
+	if r.CapReached() {
+		t.Fatal("empty runner at cap")
+	}
+	r.Submit("a")
+	if !r.CapReached() {
+		t.Fatal("cap not reached after 1 of 1")
+	}
+}
