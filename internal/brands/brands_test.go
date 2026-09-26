@@ -18,9 +18,9 @@ var cat = []Brand{
 
 func TestDecideBlocksOnYesOrUnsureInEitherScene(t *testing.T) {
 	v := []Verdict{
-		{BrandID: "brand_a", Fit: 0.9, Negatives: []NegCheck{{Context: "funeral", Before: No, After: Unsure}, {Context: "bathroom", Before: No, After: No}}},
-		{BrandID: "brand_b", Fit: 0.8, Negatives: []NegCheck{{Context: "eating", Before: Yes, After: No}}},
-		{BrandID: "brand_i", Fit: 0.4, Negatives: []NegCheck{{Context: "violence", Before: No, After: No}}},
+		{BrandID: "brand_a", Fit: 0.9, DominantMatch: yes(), Negatives: []NegCheck{{Context: "funeral", Before: No, After: Unsure}, {Context: "bathroom", Before: No, After: No}}},
+		{BrandID: "brand_b", Fit: 0.8, DominantMatch: yes(), Negatives: []NegCheck{{Context: "eating", Before: Yes, After: No}}},
+		{BrandID: "brand_i", Fit: 0.4, DominantMatch: yes(), Negatives: []NegCheck{{Context: "violence", Before: No, After: No}}},
 	}
 	d := Decide(cat, v, nil, 30)
 	if d.BrandID != "brand_i" || d.CreativeID != "i15" {
@@ -34,9 +34,9 @@ func TestDecideBlocksOnYesOrUnsureInEitherScene(t *testing.T) {
 func TestDecideTreatsMissingAnswersAsBlocked(t *testing.T) {
 	v := []Verdict{
 		// bathroom check omitted by the model
-		{BrandID: "brand_a", Fit: 0.9, Negatives: []NegCheck{{Context: "funeral", Before: No, After: No}}},
+		{BrandID: "brand_a", Fit: 0.9, DominantMatch: yes(), Negatives: []NegCheck{{Context: "funeral", Before: No, After: No}}},
 		// brand_b omitted entirely; brand_i clean but below the fit floor
-		{BrandID: "brand_i", Fit: 0.05, Negatives: []NegCheck{{Context: "violence", Before: No, After: No}}},
+		{BrandID: "brand_i", Fit: 0.05, DominantMatch: yes(), Negatives: []NegCheck{{Context: "violence", Before: No, After: No}}},
 	}
 	d := Decide(cat, v, nil, 30)
 	if d.BrandID != "" || len(d.Blocked) != 2 {
@@ -45,7 +45,7 @@ func TestDecideTreatsMissingAnswersAsBlocked(t *testing.T) {
 }
 
 func TestDecidePicksLongestCreativeThatFits(t *testing.T) {
-	v := []Verdict{{BrandID: "brand_a", Fit: 0.9, Negatives: []NegCheck{{Context: "funeral", Before: No, After: No}, {Context: "bathroom", Before: No, After: No}}}}
+	v := []Verdict{{BrandID: "brand_a", Fit: 0.9, DominantMatch: yes(), Negatives: []NegCheck{{Context: "funeral", Before: No, After: No}, {Context: "bathroom", Before: No, After: No}}}}
 	if d := Decide(cat, v, nil, 20); d.CreativeID != "a15" {
 		t.Fatalf("pod 20s should pick a15, got %+v", d)
 	}
@@ -66,8 +66,8 @@ func TestLoadCatalogue(t *testing.T) {
 func TestIndependentFlagBlocksEvenWhenPlacementModelSaysNo(t *testing.T) {
 	// Placement model confidently says no funeral; the safety check disagrees.
 	v := []Verdict{
-		{BrandID: "brand_a", Fit: 0.9, Negatives: []NegCheck{{Context: "funeral", Before: No, After: No}, {Context: "bathroom", Before: No, After: No}}},
-		{BrandID: "brand_i", Fit: 0.5, Negatives: []NegCheck{{Context: "violence", Before: No, After: No}}},
+		{BrandID: "brand_a", Fit: 0.9, DominantMatch: yes(), Negatives: []NegCheck{{Context: "funeral", Before: No, After: No}, {Context: "bathroom", Before: No, After: No}}},
+		{BrandID: "brand_i", Fit: 0.5, DominantMatch: yes(), Negatives: []NegCheck{{Context: "violence", Before: No, After: No}}},
 	}
 	d := Decide(cat, v, Flags{"funeral": "safety model: yes, mourners at a cremation (+12s)"}, 30)
 	if d.BrandID != "brand_i" || d.Blocked["brand_a"] == "" {
@@ -90,6 +90,32 @@ func TestValidate(t *testing.T) {
 	for i, b := range bad {
 		if b.Validate() == nil {
 			t.Errorf("case %d should fail", i)
+		}
+	}
+}
+
+func yes() *bool { b := true; return &b }
+func no() *bool  { b := false; return &b }
+
+func TestDominantActivityRequiredAndMinFit(t *testing.T) {
+	clean := []NegCheck{{Context: "funeral", Before: No, After: No}, {Context: "bathroom", Before: No, After: No}}
+	cases := []struct {
+		name string
+		v    Verdict
+		want string
+	}{
+		{"incidental match never places", Verdict{BrandID: "brand_a", Fit: 0.9, DominantMatch: no(), Negatives: clean}, ""},
+		{"missing dominant answer counts as no", Verdict{BrandID: "brand_a", Fit: 0.9, Negatives: clean}, ""},
+		{"weak fit below floor", Verdict{BrandID: "brand_a", Fit: 0.3, DominantMatch: yes(), Negatives: clean}, ""},
+		{"dominant match above floor places", Verdict{BrandID: "brand_a", Fit: 0.5, DominantMatch: yes(), Negatives: clean}, "brand_a"},
+	}
+	for _, c := range cases {
+		d := Decide(cat[:1], []Verdict{c.v}, nil, 30)
+		if d.BrandID != c.want {
+			t.Errorf("%s: got %q (unfit %v)", c.name, d.BrandID, d.Unfit)
+		}
+		if c.want == "" && d.Unfit["brand_a"] == "" {
+			t.Errorf("%s: no unfit reason recorded", c.name)
 		}
 	}
 }

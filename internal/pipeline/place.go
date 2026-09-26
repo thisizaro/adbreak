@@ -48,9 +48,10 @@ var placeSchema = map[string]any{
 			"items": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"brand_id":  map[string]any{"type": "string"},
-					"fit":       map[string]any{"type": "number"},
-					"rationale": map[string]any{"type": "string"},
+					"brand_id":                  map[string]any{"type": "string"},
+					"fit":                       map[string]any{"type": "number"},
+					"matches_dominant_activity": map[string]any{"type": "boolean"},
+					"rationale":                 map[string]any{"type": "string"},
 					"negatives": map[string]any{
 						"type": "array",
 						"items": map[string]any{
@@ -65,12 +66,14 @@ var placeSchema = map[string]any{
 						},
 					},
 				},
-				"required": []string{"brand_id", "fit", "rationale", "negatives"},
+				"required": []string{"brand_id", "fit", "matches_dominant_activity", "rationale", "negatives"},
 			},
 		},
 	},
 	"required": []string{"scene_before", "scene_after", "verdicts"},
 }
+
+const placePromptVersion = "v2-dominant"
 
 const placePrompt = `You are placing one ad at a break in a Bengali TV drama.
 You get frames from the scene BEFORE the break (the last seconds before it) and from the scene AFTER it,
@@ -79,7 +82,10 @@ the transcript around the break (may be imperfect), and a brand catalogue.
 1. Describe scene_before and scene_after: a one-sentence description, the dominant activity, and a list of short context tags (places, activities, moods, events).
 2. For EVERY brand in the catalogue return a verdict:
    - negatives: for EVERY one of that brand's negative_contexts, exactly as spelled, say whether it is present in the scene before and in the scene after: "yes", "no" or "unsure". Judge meaning, not words: a cremation, shraddho or mourning counts as funeral and grief; someone hurt counts as injury or accident; a meal being eaten counts as eating. Use "unsure" whenever the evidence is ambiguous. Give brief evidence.
-   - fit: 0 to 1, how well the brand's target_contexts match the DOMINANT activity of the scenes around the break (weigh the scene before most).
+   - matches_dominant_activity: true only if one of the brand's target_contexts matches what the scene is mainly about,
+     its dominant activity. False if the match rests on something incidental: a prop in the background, a brief
+     flashback, a passing mention, a single frame. When the dominant activity is something else, answer false.
+   - fit: 0 to 1, how well the brand's target_contexts match the DOMINANT activity of the scenes around the break (weigh the scene before most). An incidental match scores low.
    - rationale: one short sentence.
 Do not skip any brand or any negative context.`
 
@@ -96,7 +102,8 @@ func (d Deps) Place(ctx context.Context, ep Episode, t float64, catalogue []bran
 	}
 	catJSON, _ := json.Marshal(cat)
 	// The catalogue is part of the cache key, so adding a brand re-runs placement.
-	key := fmt.Sprintf("place_%.2f_%x.json", t, sha256.Sum256(catJSON))
+	// Prompt version is part of the key so a changed question never reuses old answers.
+	key := fmt.Sprintf("place_%.2f_%x.json", t, sha256.Sum256(append([]byte(placePromptVersion), catJSON...)))
 	key = key[:len("place_")+len(fmt.Sprintf("%.2f", t))+1+12] + ".json"
 	return cached(ep.Dir, key, func() (Placement, error) {
 		work := filepath.Join(ep.Dir, "place")

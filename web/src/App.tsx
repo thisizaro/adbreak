@@ -56,7 +56,7 @@ function Library({ open }: { open: (id: string) => void }) {
             <strong>{e.id.replaceAll('_', ' ')}</strong>
             <span>
               {fmt(e.duration)} · {e.funnel.considered_for_placement} safe break{e.funnel.considered_for_placement === 1 ? '' : 's'} found · {e.funnel.placed} placed
-              {e.funnel.suppressed_for_brand_safety > 0 && ` · ${e.funnel.suppressed_for_brand_safety} suppressed for brand safety`}
+              {e.funnel.suppressed_for_brand_safety > 0 && ` · ${e.funnel.suppressed_for_brand_safety} held back`}
             </span>
             <small>
               {e.funnel.shots} shots → {e.funnel.scenes} scenes → {e.funnel.pass_hard_filters} past transcript guard → AI audio check caught{' '}
@@ -137,9 +137,10 @@ function Episode({ id }: { id: string }) {
             ['scenes', f.scenes],
             ['pass head/tail + transcript guard', f.pass_hard_filters],
             ['mid-dialogue cuts caught by AI audio check (transcript said silent)', f.caught_by_ai_audio_check],
+            ['rejected by the final per-break speech check (two models)', f.rejected_by_final_speech_check ?? 0],
             [`safe breaks considered (budget ${f.break_budget})`, f.considered_for_placement],
             ['placed with a brand', f.placed],
-            ['suppressed for brand safety', f.suppressed_for_brand_safety],
+            ['held back: brand safety or no brand fits', f.suppressed_for_brand_safety],
           ].map(([label, n]) => (
             <div key={label as string}>
               <b>{n}</b>
@@ -153,7 +154,7 @@ function Episode({ id }: { id: string }) {
         <h3>Breaks</h3>
         {breaks.length === 0 && (
           <p className="muted">
-            No break was placed. {f.suppressed_for_brand_safety > 0 ? 'Every safe pause sits next to content no brand may appear against (see below).' : 'No pause cleared the rules.'}
+            No break was placed. {f.suppressed_for_brand_safety > 0 ? 'Every safe pause was held back: brand safety or no brand fits the scene (see below).' : 'No pause cleared the rules, including the final speech check.'}
           </p>
         )}
         {breaks.map((b, i) => (
@@ -207,11 +208,12 @@ function Episode({ id }: { id: string }) {
 
       {(res.unplaced ?? []).length > 0 && (
         <section>
-          <h3>Suppressed for brand safety ({(res.unplaced ?? []).length})</h3>
-          <p className="muted">Speech-safe pauses where no brand was allowed. A wrongly placed ad is a violation; a skipped break costs one impression.</p>
+          <h3>Held back ({(res.unplaced ?? []).length})</h3>
+          <p className="muted">Speech-safe pauses where no brand was allowed (brand safety) or no brand matched what the scene is mainly about. A wrongly placed ad is a violation; a skipped break costs one impression.</p>
           {(res.unplaced ?? []).map((u) => {
             const reasons = Object.values(u.decision.blocked)
-            const top = reasons.find((r) => r.includes('independent')) ?? reasons[0] ?? 'no brand fit this moment'
+            const unfit = Object.keys(u.decision.unfit ?? {}).length
+            const top = reasons.find((r) => r.includes('independent')) ?? reasons[0] ?? (unfit > 0 ? `No brand matches the dominant activity of this scene (${unfit} checked).` : 'No brand fit this moment.')
             return (
               <div key={u.t} className="break suppressed">
                 <div className="row">

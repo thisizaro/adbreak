@@ -66,10 +66,13 @@ type Verdict struct {
 	Fit       float64    `json:"fit"`
 	Rationale string     `json:"rationale"`
 	Negatives []NegCheck `json:"negatives"`
+	// DominantMatch: does the brand fit the scene's dominant activity, as opposed
+	// to something incidental (a prop, a brief flashback)? Missing counts as no.
+	DominantMatch *bool `json:"matches_dominant_activity"`
 }
 
 // MinFit is the floor below which a clean brand is still not worth the slot.
-const MinFit = 0.2
+const MinFit = 0.35
 
 type Decision struct {
 	BrandID    string            `json:"brand_id,omitempty"`
@@ -78,6 +81,7 @@ type Decision struct {
 	Fit        float64           `json:"fit,omitempty"`
 	Rationale  string            `json:"rationale,omitempty"`
 	Blocked    map[string]string `json:"blocked"`
+	Unfit      map[string]string `json:"unfit"` // unblocked but not a fit for this moment
 	Unblocked  []string          `json:"unblocked"`
 }
 
@@ -91,7 +95,7 @@ func Decide(catalogue []Brand, verdicts []Verdict, flags Flags, podSeconds float
 	for _, v := range verdicts {
 		byID[v.BrandID] = v
 	}
-	d := Decision{Blocked: map[string]string{}, Unblocked: []string{}}
+	d := Decision{Blocked: map[string]string{}, Unfit: map[string]string{}, Unblocked: []string{}}
 	type cand struct {
 		b Brand
 		v Verdict
@@ -112,7 +116,13 @@ func Decide(catalogue []Brand, verdicts []Verdict, flags Flags, podSeconds float
 			continue
 		}
 		d.Unblocked = append(d.Unblocked, b.ID)
-		if v.Fit >= MinFit {
+		switch {
+		case v.DominantMatch == nil || !*v.DominantMatch:
+			// The brief: dominant scene activity wins. An incidental match never places.
+			d.Unfit[b.ID] = "does not match the dominant activity of the scene"
+		case v.Fit < MinFit:
+			d.Unfit[b.ID] = fmt.Sprintf("fit %.2f below %.2f", v.Fit, MinFit)
+		default:
 			ok = append(ok, cand{b, v})
 		}
 	}

@@ -9,6 +9,7 @@ export type Funnel = {
   considered_for_placement: number
   placed: number
   suppressed_for_brand_safety: number
+  rejected_by_final_speech_check?: number
 }
 
 export type Summary = {
@@ -41,6 +42,7 @@ export type Placement = {
     fit?: number
     rationale?: string
     blocked: Record<string, string>
+    unfit?: Record<string, string>
     unblocked: string[]
   }
 }

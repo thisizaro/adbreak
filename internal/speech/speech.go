@@ -14,9 +14,10 @@ type Word struct {
 }
 
 type Segment struct {
-	Start float64 `json:"start"`
-	End   float64 `json:"end"`
-	Text  string  `json:"text"`
+	Start    float64 `json:"start"`
+	End      float64 `json:"end"`
+	Text     string  `json:"text"`
+	NoSpeech float64 `json:"no_speech_prob,omitempty"`
 }
 
 type Transcript struct {

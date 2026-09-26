@@ -101,6 +101,7 @@ func (g *Groq) once(ctx context.Context, audioPath string) (Transcript, bool, er
 		Segments []struct {
 			Start, End float64
 			Text       string
+			NoSpeech   float64 `json:"no_speech_prob"`
 		} `json:"segments"`
 		Words []struct {
 			Word       string
@@ -112,7 +113,7 @@ func (g *Groq) once(ctx context.Context, audioPath string) (Transcript, bool, er
 	}
 	var tr Transcript
 	for _, s := range v.Segments {
-		tr.Segments = append(tr.Segments, Segment{Start: s.Start, End: s.End, Text: strings.TrimSpace(s.Text)})
+		tr.Segments = append(tr.Segments, Segment{Start: s.Start, End: s.End, Text: strings.TrimSpace(s.Text), NoSpeech: s.NoSpeech})
 	}
 	for _, w := range v.Words {
 		tr.Words = append(tr.Words, Word{Start: w.Start, End: w.End, Text: strings.TrimSpace(w.Word)})
