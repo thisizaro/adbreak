@@ -14,12 +14,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/thisizaro/adbreak/internal/ai"
 	"github.com/thisizaro/adbreak/internal/media"
 	"github.com/thisizaro/adbreak/internal/speech"
 )
 
 type Deps struct {
 	ASR            speech.Provider
+	AI             ai.Provider
 	ShotThreshold  float64
 	ChunkSeconds   float64
 	OverlapSeconds float64

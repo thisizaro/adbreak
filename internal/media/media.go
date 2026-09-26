@@ -146,3 +146,14 @@ func tail(s string) string {
 	}
 	return s
 }
+
+// AudioClip writes a mono 16kHz MP3 of [start, start+length) seconds.
+func AudioClip(ctx context.Context, path string, start, length float64, out string) error {
+	start = math.Max(0, start)
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-v", "error", "-y", "-ss", fmt.Sprintf("%.3f", start),
+		"-t", fmt.Sprintf("%.3f", length), "-i", path, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "32k", out)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("ffmpeg clip at %.2f: %w: %s", start, err, tail(string(b)))
+	}
+	return nil
+}
