@@ -23,6 +23,9 @@ type Pacing struct {
 	SpeechMargin     time.Duration
 	PodSeconds       float64
 	MinScore         float64
+	HeadPct          float64
+	TailPct          float64
+	GapFraction      float64
 }
 
 type Config struct {
@@ -47,6 +50,7 @@ type Config struct {
 	BrandsPath  string
 	SlateFont   string
 	MaxUploadMB int
+	ShotThresh  float64
 	UploadTo    string
 	UploadPfx   string
 	MaxUploadS  float64
@@ -77,18 +81,22 @@ func Load() (Config, error) {
 		BrandsPath:  str("BRANDS_PATH", "assets/brands.json"),
 		SlateFont:   str("SLATE_FONT", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
 		MaxUploadMB: integer("MAX_UPLOAD_MB", 700, &errs),
+		ShotThresh:  float("SHOT_THRESHOLD", 0.15, &errs),
 		UploadTo:    str("UPLOAD_TARGET", "local"),
 		UploadPfx:   str("GCS_UPLOAD_PREFIX", "videos/"),
 		MaxUploadS:  float("MAX_UPLOAD_SECONDS", 3600, &errs),
 		Pacing: Pacing{
 			MaxBreaksPerHour: integer("PACING_MAX_BREAKS_PER_HOUR", 6, &errs),
-			MinGap:           dur("PACING_MIN_GAP", 6*time.Minute, &errs),
+			MinGap:           dur("PACING_MIN_GAP", 4*time.Minute, &errs),
 			MaxAdLoadPct:     float("PACING_MAX_AD_LOAD_PCT", 15, &errs),
 			HeadMargin:       dur("PACING_HEAD_MARGIN", 3*time.Minute, &errs),
 			TailMargin:       dur("PACING_TAIL_MARGIN", 2*time.Minute, &errs),
 			SpeechMargin:     dur("SPEECH_MARGIN", 500*time.Millisecond, &errs),
 			PodSeconds:       float("PACING_POD_SECONDS", 30, &errs),
 			MinScore:         float("PACING_MIN_SCORE", 0.35, &errs),
+			HeadPct:          float("PACING_HEAD_PCT", 8, &errs),
+			TailPct:          float("PACING_TAIL_PCT", 5, &errs),
+			GapFraction:      float("PACING_GAP_FRACTION", 0.2, &errs),
 		},
 	}
 	if c.UploadTo != "local" && !(c.UploadTo == "gcs" && c.GCSBucket != "") {
@@ -116,6 +124,7 @@ func (c Config) PipelinePacing() pipeline.Pacing {
 		MaxBreaksPerHour: float64(p.MaxBreaksPerHour), MinGap: p.MinGap.Seconds(), MaxAdLoadPct: p.MaxAdLoadPct,
 		HeadMargin: p.HeadMargin.Seconds(), TailMargin: p.TailMargin.Seconds(), SpeechMargin: p.SpeechMargin.Seconds(),
 		PodSeconds: p.PodSeconds, MinScore: p.MinScore,
+		HeadPct: p.HeadPct, TailPct: p.TailPct, GapFraction: p.GapFraction,
 	}
 }
 
@@ -130,8 +139,9 @@ func (c Config) Print(w io.Writer) {
 	fmt.Fprintf(w, "  models: bulk=%s decide=%s\n", c.GeminiModel, c.DecideModel)
 	fmt.Fprintf(w, "  groq_api_key=%s asr_model=%s groq_url=%s\n", secret(c.GroqKey), c.ASRModel, c.GroqURL)
 	p := c.Pacing
-	fmt.Fprintf(w, "  pacing: max_breaks_per_hour=%d min_gap=%s max_ad_load_pct=%.1f head_margin=%s tail_margin=%s speech_margin=%s pod_seconds=%.0f min_score=%.2f\n",
-		p.MaxBreaksPerHour, p.MinGap, p.MaxAdLoadPct, p.HeadMargin, p.TailMargin, p.SpeechMargin, p.PodSeconds, p.MinScore)
+	fmt.Fprintf(w, "  pacing: max_breaks_per_hour=%d max_ad_load_pct=%.1f head=min(%s,%.0f%%) tail=min(%s,%.0f%%) min_gap=max(%s,%.2f*duration) speech_margin=%s pod_seconds=%.0f min_score=%.2f\n",
+		p.MaxBreaksPerHour, p.MaxAdLoadPct, p.HeadMargin, p.HeadPct, p.TailMargin, p.TailPct, p.MinGap, p.GapFraction, p.SpeechMargin, p.PodSeconds, p.MinScore)
+	fmt.Fprintf(w, "  shot_threshold=%.2f\n", c.ShotThresh)
 }
 
 func secret(v string) string {

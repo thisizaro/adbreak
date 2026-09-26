@@ -42,7 +42,7 @@ func (f *Factory) Deps(progress func(stage, msg string)) pipeline.Deps {
 		ASR:            &speech.Groq{BaseURL: f.cfg.GroqURL, APIKey: f.cfg.GroqKey, Model: f.cfg.ASRModel, Language: "bn"},
 		AI:             ai.New(s, f.vertex, f.cfg.GeminiModel),
 		Decide:         ai.New(s, f.vertex, f.cfg.DecideModel),
-		ShotThreshold:  0.3,
+		ShotThreshold:  f.cfg.ShotThresh,
 		ChunkSeconds:   600,
 		OverlapSeconds: 5,
 		ASRParallelism: 3,

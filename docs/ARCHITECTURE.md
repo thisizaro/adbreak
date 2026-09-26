@@ -60,7 +60,7 @@ Every stage records its input and output counts in the debug JSON.
 ```mermaid
 flowchart TD
   V[video] --> P[probe<br/>ffprobe]
-  P --> SH[shot detection<br/>ffmpeg scene score]
+  P --> SH[shot detection<br/>ffmpeg scene score 0.15]
   P --> AU[audio 16k mono<br/>10 min chunks, 5s overlap]
   AU --> ASR[Whisper large-v3 on Groq<br/>segments + words, merged at overlap midpoints]
   SH --> KF[keyframe per shot<br/>colour histogram]
@@ -75,10 +75,12 @@ flowchart TD
   G2 -- no --> S[AI natural-break score]
   SD --> SCX[scene context: +0.1 within -15s/+20s<br/>of a scene start, x0.6 mid-scene]
   S --> SCX
-  SCX --> DP[pacing DP<br/>max total score s.t. min gap, budget<br/>from per-hour rate and ad load, min score]
+  SCX --> DP[pacing DP<br/>max total score s.t. min gap max 240s or 0.2 x duration,<br/>budget from per-hour rate and ad load, min score]
   DP --> B[brand match per selected break]
   B --> M[VMAP + VAST + debug JSON]
 ```
+
+Each break also records how it relates to the nearest scene start (shift in seconds and why).
 
 Change (LOG, needs review): candidates are shot cuts shaped by scene context, not exact scene
 boundaries only, because narration runs across transitions and exact boundaries all fail the speech guard.
@@ -95,7 +97,12 @@ flowchart TD
   CAT[brands.json + runtime brands] --> LOOP[for each brand]
   CTX --> LOOP
   LOOP --> Q[AI: for each negative_context of THIS brand<br/>present? yes / no / unsure + evidence]
-  Q --> H{code: any yes or unsure<br/>in either scene?}
+  BR --> SAF[second model, independent: every negative context<br/>in frames from -30s to +40s: yes / no / unsure]
+  CTX --> TAG[scene tags in that window<br/>matched to negative contexts]
+  SAF --> FL[independent flags]
+  TAG --> FL
+  FL --> H
+  Q --> H{code: any yes or unsure from placement model<br/>in either scene, or any independent flag?}
   H -- yes --> BLK[blocked, reason recorded]
   H -- no --> RANK[AI ranks eligible brands by dominant<br/>activity vs target_contexts, with rationale]
   RANK --> PICK[top brand + creative that fits the slot]

@@ -102,6 +102,13 @@ function Episode({ id }: { id: string }) {
       <Player ref={player} src={`/media/episodes/${id}.mp4`} slots={slots} duration={res.media.duration} sceneStarts={(res.scenes ?? []).slice(1).map((s) => s.start)} />
       <p className="legend"><i className="lg-scene" /> scene boundary <i className="lg-break" /> ad break</p>
 
+      {res.effective_pacing && (
+        <p className="muted">
+          Pacing for this {fmt(res.media.duration)} episode: head {Math.round(res.effective_pacing.head_margin_sec)}s, tail{' '}
+          {Math.round(res.effective_pacing.tail_margin_sec)}s, min gap {Math.round(res.effective_pacing.min_gap_sec)}s, budget{' '}
+          {res.effective_pacing.break_budget} breaks
+        </p>
+      )}
       <section>
         <h3>Funnel</h3>
         <div className="funnel">
@@ -133,6 +140,7 @@ function Episode({ id }: { id: string }) {
               <button onClick={() => player.current?.seek(Math.max(0, b.t - 6))}>Play 6s before</button>
             </div>
             <p>Why here: {b.rationale}</p>
+            {b.boundary && <p className="muted">Scene boundary: {b.boundary.note}</p>}
             <p>Why this brand: {b.placement.decision.rationale}</p>
             <div className="scenes">
               <div>
@@ -146,6 +154,18 @@ function Episode({ id }: { id: string }) {
                 <small className="muted">{b.placement.scene_after.dominant_activity} · {b.placement.scene_after.contexts.join(', ')}</small>
               </div>
             </div>
+            {b.safety_checks && (
+              <div className="safety">
+                <small>independent safety check (second model, 30s before to 40s after)</small>
+                <div>
+                  {b.safety_checks.map((c) => (
+                    <span key={c.context} className={c.answer === 'no' ? 'chip ok' : 'chip bad'} title={c.evidence}>
+                      {c.context}: {c.answer}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             {Object.keys(b.placement.decision.blocked).length > 0 && (
               <div className="blocked">
                 <small>blocked brands (hard rule)</small>
