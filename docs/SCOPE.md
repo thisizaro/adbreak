@@ -83,7 +83,7 @@ Vertical slice target: 16:00 to 16:30 IST. Feature freeze: 23:00 IST. Submit by 
 - [ ] 2.2 Postgres schema + migrations (jobs, stage results, AI call cache)
 - [ ] 2.3 In-process event bus + job runner with stage progress
 - [ ] 2.4 Storage interface (local disk in dev, GCS in prod)
-- [ ] 2.5 Dockerfile (debian-slim + ffmpeg + fonts), deploy skeleton
+- [~] 2.5 Dockerfile (debian-slim + ffmpeg + fonts) built and run locally; deploy pending
 
 ### 3. Vertical slice
 - [x] 3.1 Probe + shot detection
