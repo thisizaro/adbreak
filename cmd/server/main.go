@@ -10,7 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/thisizaro/adbreak/internal/brands"
 	"github.com/thisizaro/adbreak/internal/config"
+	"github.com/thisizaro/adbreak/internal/library"
 	"github.com/thisizaro/adbreak/internal/server"
 	"github.com/thisizaro/adbreak/web"
 )
@@ -27,9 +29,17 @@ func main() {
 		log.Fatal(err)
 	}
 
+	catalogue, err := brands.Load(cfg.BrandsPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("catalogue: %d brands from %s", len(catalogue), cfg.BrandsPath)
+	lib := &library.Library{DataDir: cfg.DataDir, VideoDir: cfg.VideoDir, Font: cfg.SlateFont,
+		Catalogue: func() []brands.Brand { return catalogue }}
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           server.New(cfg.Version, static).Handler(),
+		Handler:           server.New(cfg.Version, static, lib, cfg.PipelinePacing()).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

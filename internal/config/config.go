@@ -4,6 +4,9 @@ package config
 
 import (
 	"fmt"
+
+	"github.com/thisizaro/adbreak/internal/pipeline"
+
 	"io"
 	"os"
 	"strconv"
@@ -32,6 +35,10 @@ type Config struct {
 	GroqKey     string
 	GroqURL     string
 	ASRModel    string
+	DataDir     string
+	VideoDir    string
+	BrandsPath  string
+	SlateFont   string
 	Pacing      Pacing
 }
 
@@ -48,6 +55,10 @@ func Load() (Config, error) {
 		GroqKey:     str("GROQ_API_KEY", ""),
 		GroqURL:     str("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
 		ASRModel:    str("ASR_MODEL", "whisper-large-v3"),
+		DataDir:     str("DATA_DIR", "data"),
+		VideoDir:    str("VIDEO_DIR", "assets"),
+		BrandsPath:  str("BRANDS_PATH", "assets/brands.json"),
+		SlateFont:   str("SLATE_FONT", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
 		Pacing: Pacing{
 			MaxBreaksPerHour: integer("PACING_MAX_BREAKS_PER_HOUR", 6, &errs),
 			MinGap:           dur("PACING_MIN_GAP", 6*time.Minute, &errs),
@@ -65,11 +76,22 @@ func Load() (Config, error) {
 	return c, nil
 }
 
+// PipelinePacing converts pacing to the plain seconds form the pipeline and UI use.
+func (c Config) PipelinePacing() pipeline.Pacing {
+	p := c.Pacing
+	return pipeline.Pacing{
+		MaxBreaksPerHour: float64(p.MaxBreaksPerHour), MinGap: p.MinGap.Seconds(), MaxAdLoadPct: p.MaxAdLoadPct,
+		HeadMargin: p.HeadMargin.Seconds(), TailMargin: p.TailMargin.Seconds(), SpeechMargin: p.SpeechMargin.Seconds(),
+		PodSeconds: p.PodSeconds, MinScore: p.MinScore,
+	}
+}
+
 // Print writes the effective configuration. Secrets are reported as set or unset only.
 func (c Config) Print(w io.Writer) {
 	fmt.Fprintln(w, "effective config:")
 	fmt.Fprintf(w, "  port=%s version=%s\n", c.Port, c.Version)
 	fmt.Fprintf(w, "  database_url=%s gcs_bucket=%q\n", secret(c.DatabaseURL), c.GCSBucket)
+	fmt.Fprintf(w, "  data_dir=%s video_dir=%s brands=%s slate_font=%s\n", c.DataDir, c.VideoDir, c.BrandsPath, c.SlateFont)
 	fmt.Fprintf(w, "  gemini_api_key=%s gemini_model=%s gemini_url=%s\n", secret(c.GeminiKey), c.GeminiModel, c.GeminiURL)
 	fmt.Fprintf(w, "  groq_api_key=%s asr_model=%s groq_url=%s\n", secret(c.GroqKey), c.ASRModel, c.GroqURL)
 	p := c.Pacing

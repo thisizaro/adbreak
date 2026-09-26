@@ -47,12 +47,7 @@ func main() {
 	}
 	gem := &ai.Gemini{BaseURL: cfg.GeminiURL, APIKey: cfg.GeminiKey, Model: cfg.GeminiModel}
 	d.AI = gem
-	pc := cfg.Pacing
-	res, err := d.Run(context.Background(), ep, catalogue, pipeline.Pacing{
-		MaxBreaksPerHour: float64(pc.MaxBreaksPerHour), MinGap: pc.MinGap.Seconds(), MaxAdLoadPct: pc.MaxAdLoadPct,
-		HeadMargin: pc.HeadMargin.Seconds(), TailMargin: pc.TailMargin.Seconds(), SpeechMargin: pc.SpeechMargin.Seconds(),
-		PodSeconds: pc.PodSeconds, MinScore: pc.MinScore,
-	})
+	res, err := d.Run(context.Background(), ep, catalogue, cfg.PipelinePacing())
 	if err != nil {
 		log.Fatal(err)
 	}
