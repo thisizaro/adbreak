@@ -33,6 +33,7 @@ Re-read before any significant change. If a request contradicts this list, say s
 - No message broker, Kubernetes, compose stack or observability stack. In-process
   event bus, one instance.
 - No custom domain today. Demo URL is the *.run.app one.
+- No Postgres. Results, AI cache and uploads live in the bucket as files.
 - No real ad creatives. Ad slates are generated with ffmpeg at exact durations.
 - No Google IMA SDK dependency in the player; our own player consumes our VMAP.
 - No fine-tuning, training or model hosting.
@@ -71,7 +72,7 @@ Vertical slice target: 16:00 to 16:30 IST. Feature freeze: 23:00 IST. Submit by 
 - [x] 0.1 Repo, Go module, layout, docs folder
 - [x] 0.2 Postgres (Docker), ffmpeg (static), assets downloaded and probed, API keys verified
 - [x] 0.3 Public GitHub repo, first push
-- [ ] 0.4 GCP project, bucket, budget alert, gcloud auth (with Aranya)
+- [x] 0.4 GCP project, bucket, budget alert, gcloud auth (with Aranya)
 
 ### 1. Docs
 - [x] 1.1 SCOPE.md approved
@@ -80,10 +81,10 @@ Vertical slice target: 16:00 to 16:30 IST. Feature freeze: 23:00 IST. Submit by 
 
 ### 2. Foundation
 - [x] 2.1 Config printed at startup, health endpoint, embedded SPA with fallback
-- [ ] 2.2 Postgres schema + migrations (jobs, stage results, AI call cache)
+- [-] 2.2 Postgres dropped (Aranya 17:32): results and caches are JSON in the bucket
 - [x] 2.3 In-process event bus + job runner with stage progress
-- [ ] 2.4 Storage interface (local disk in dev, GCS in prod)
-- [~] 2.5 Dockerfile (debian-slim + ffmpeg + fonts) built and run locally; deploy pending
+- [x] 2.4 Storage interface (local disk in dev, GCS in prod)
+- [x] 2.5 Dockerfile + deploy (Cloud Run live)
 
 ### 3. Vertical slice
 - [x] 3.1 Probe + shot detection
@@ -102,11 +103,11 @@ Vertical slice target: 16:00 to 16:30 IST. Feature freeze: 23:00 IST. Submit by 
 - [x] 4.4 AI break scoring with rationale
 - [x] 4.5 Semantic per-brand negative check on scenes before and after, uncertain = blocked; ranking with rationale
 - [x] 4.6 Debug JSON with rejections + funnel counts; timeline, break detail, funnel UI
-- [~] 4.7 Async upload: signed URL to GCS, job id, polling, stage progress
-- [ ] 4.8 AI call cache by content hash + Re-run live
-- [ ] 4.9 Add-a-9th-brand flow in UI
-- [~] 4.10 Budget guard: max upload MB + duration and one job at a time done; token cap not done
-- [ ] 4.11 Precompute all 6 episodes on the deployed instance
+- [x] 4.7 Async upload: signed URL to GCS, job id, polling, stage progress
+- [x] 4.8 AI call cache by content hash + Re-run live
+- [x] 4.9 Add-a-9th-brand flow in UI
+- [x] 4.10 Budget guard: max upload MB + duration and one job at a time done; token cap not done
+- [x] 4.11 Precompute all 6 episodes on the deployed instance
 
 ### 5. Tests (alongside the code)
 - [x] 5.1 Speech guard
@@ -121,7 +122,7 @@ Vertical slice target: 16:00 to 16:30 IST. Feature freeze: 23:00 IST. Submit by 
 - [x] 6.1 GitHub Actions: go vet, go test, web build (parallel jobs) on push and PR
 
 ### 7. Validation checkpoints (other chat)
-- [ ] 7.1 SCOPE  - [ ] 7.2 after slice  - [ ] 7.3 brand matching  - [ ] 7.4 cut list ~21:30
+- [x] 7.1 SCOPE  - [ ] 7.2 after slice  - [ ] 7.3 brand matching  - [ ] 7.4 cut list ~21:30
 
 ### 8. Ship
 - [ ] 8.1 Freeze 23:00, README, full demo pass on prod, record video, submit before 00:30
