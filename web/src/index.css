@@ -70,3 +70,16 @@ tr.rej { color: var(--muted); }
 .trialbar button { margin-left: 8px; }
 .skip { margin-left: 10px; padding: 2px 8px; font-size: 12px; }
 .suppressed { border-color: #5a2a22; }
+.newbrand { background: #3a2f0b; color: #ffd166; border: 1px solid #806a1a; border-radius: 4px; padding: 1px 7px; font-size: 12px; font-weight: 700; }
+.trial-summary { margin-top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.trial-ep { border-top: 1px solid var(--line); padding: 10px 0 4px; }
+.trial-ep .row button { margin-left: auto; }
+.outcome { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; padding: 5px 0; font-size: 14px; }
+.outcome .tag-o { border-radius: 4px; padding: 1px 7px; font-weight: 700; font-size: 12px; }
+.outcome.won .tag-o { background: #1d3325; color: #9fe0b2; }
+.outcome.lost .tag-o { background: #262c38; color: var(--text); }
+.outcome.blocked .tag-o { background: #3d1f1a; color: #ffb4a3; }
+.outcome.unfit .tag-o { background: #2e2a1a; color: #e8d59a; }
+.outcome button { margin-left: auto; padding: 3px 10px; font-size: 13px; }
+.progressbar { height: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; margin-top: 8px; max-width: 520px; }
+.progressbar div { height: 100%; background: var(--accent); }

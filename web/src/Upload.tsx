@@ -6,6 +6,7 @@ type Job = { id: string; episode: string; status: string; stage: string; log: st
 export default function Upload({ done }: { done: (episode: string) => void }) {
   const [job, setJob] = useState<Job | null>(null)
   const [msg, setMsg] = useState('')
+  const [progress, setProgress] = useState<Progress | null>(null)
 
   async function send(file: File) {
     try {
@@ -20,8 +21,8 @@ export default function Upload({ done }: { done: (episode: string) => void }) {
       if (!ur.ok) throw new Error(up.error)
       setMsg(`uploading ${(file.size / 1e6).toFixed(0)} MB…`)
       // Locally this is our own endpoint; on Cloud Run it is a GCS resumable session URL.
-      const put = await fetch(up.upload_url, { method: 'PUT', body: file, headers: { 'Content-Type': 'video/mp4' } })
-      if (!put.ok) throw new Error(`upload failed: HTTP ${put.status}`)
+      await putWithProgress(up.upload_url, file, setProgress)
+      setProgress(null)
       setMsg('checking the video…')
       const fin = await fetch(`/api/uploads/${up.id}/finalize`, { method: 'POST' })
       const finBody = await fin.json()
@@ -52,6 +53,17 @@ export default function Upload({ done }: { done: (episode: string) => void }) {
       <p className="muted">MP4 up to 60 minutes and 700 MB. H.264 video plays in every browser. Processing a 25 minute episode takes a few minutes; you can leave this page open.</p>
       <input type="file" accept="video/mp4" onChange={(e) => e.target.files?.[0] && send(e.target.files[0])} />
       {msg && <p className="muted">{msg}</p>}
+      {progress && (
+        <div>
+          <div className="progressbar">
+            <div style={{ width: `${progress.pct}%` }} />
+          </div>
+          <p className="muted">
+            Uploading {progress.pct.toFixed(0)}%: {(progress.sent / 1048576).toFixed(0)} of {(progress.total / 1048576).toFixed(0)} MB,{' '}
+            {(progress.rate / 1048576).toFixed(1)} MB/s, about {fmtEta(progress.eta)} left. Analysis starts when the upload finishes.
+          </p>
+        </div>
+      )}
       {job && (
         <div className="joblog">
           <b>
@@ -82,5 +94,32 @@ function localDuration(file: File): Promise<number> {
     v.onerror = () => done(0)
     setTimeout(() => done(0), 8000)
     v.src = url
+  })
+}
+
+type Progress = { sent: number; total: number; pct: number; rate: number; eta: number }
+
+function fmtEta(sec: number): string {
+  if (!isFinite(sec)) return 'calculating'
+  if (sec < 60) return `${Math.ceil(sec)} s`
+  return `${Math.floor(sec / 60)} min ${Math.ceil(sec % 60)} s`
+}
+
+// fetch cannot report upload progress, so the PUT uses XMLHttpRequest.
+function putWithProgress(url: string, file: File, on: (p: Progress) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    const started = Date.now()
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', 'video/mp4')
+    xhr.upload.onprogress = (e) => {
+      const total = e.lengthComputable ? e.total : file.size
+      const secs = (Date.now() - started) / 1000
+      const rate = secs > 0 ? e.loaded / secs : 0
+      on({ sent: e.loaded, total, pct: (e.loaded / total) * 100, rate, eta: rate > 0 ? (total - e.loaded) / rate : Infinity })
+    }
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`upload failed: HTTP ${xhr.status}`)))
+    xhr.onerror = () => reject(new Error('upload failed: network error'))
+    xhr.send(file)
   })
 }

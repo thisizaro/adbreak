@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import Player, { type PlayerHandle } from './Player'
 import Upload from './Upload'
-import TryBrand from './TryBrand'
+import TryBrand, { TryBrandAll } from './TryBrand'
 import { fmt, getEpisode, listEpisodes, loadVMAP, type AdSlot, type Result, type Summary } from './api'
 
 function useRoute() {
-  const [path, setPath] = useState(location.pathname)
+  const [path, setPath] = useState(location.pathname + location.search)
   useEffect(() => {
-    const on = () => setPath(location.pathname)
+    const on = () => setPath(location.pathname + location.search)
     addEventListener('popstate', on)
     return () => removeEventListener('popstate', on)
   }, [])
@@ -21,6 +21,7 @@ function useRoute() {
 export default function App() {
   const { path, go } = useRoute()
   const m = path.match(/^\/episodes\/([\w-]+)/)
+  const trialParam = new URLSearchParams(path.split('?')[1] ?? '').get('trial') ?? undefined
   return (
     <div className="app">
       <header>
@@ -29,12 +30,12 @@ export default function App() {
         </a>
         <span className="tag">context-aware ad breaks for Bengali drama</span>
       </header>
-      {m ? <Episode id={m[1]} /> : <Library open={(id) => go(`/episodes/${id}`)} />}
+      {m ? <Episode key={path} id={m[1]} trialName={trialParam} /> : <Library open={(id) => go(`/episodes/${id}`)} go={go} />}
     </div>
   )
 }
 
-function Library({ open }: { open: (id: string) => void }) {
+function Library({ open, go }: { open: (id: string) => void; go: (p: string) => void }) {
   const [eps, setEps] = useState<Summary[] | null>(null)
   const [pacing, setPacing] = useState<Record<string, number> | null>(null)
   const [err, setErr] = useState('')
@@ -67,6 +68,7 @@ function Library({ open }: { open: (id: string) => void }) {
         ))}
       </div>
       <Upload done={open} />
+      <TryBrandAll open={go} />
       {pacing && (
         <section>
           <h3>Pacing rules (config, enforced in code)</h3>
@@ -84,7 +86,7 @@ function Library({ open }: { open: (id: string) => void }) {
   )
 }
 
-function Episode({ id }: { id: string }) {
+function Episode({ id, trialName }: { id: string; trialName?: string }) {
   const [base, setBase] = useState<Result | null>(null)
   const [trial, setTrial] = useState<{ res: Result; name: string } | null>(null)
   const [slots, setSlots] = useState<AdSlot[]>([])
@@ -94,7 +96,14 @@ function Episode({ id }: { id: string }) {
     Promise.all([getEpisode(id), loadVMAP(id)])
       .then(([r, s]) => (setBase(r), setSlots(s)))
       .catch((e) => setErr(String(e)))
-  }, [id])
+    if (trialName) {
+      fetch(`/api/episodes/${id}/trials/${trialName}`)
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('trial not found'))))
+        .then((r: Result) => showTrial(r, trialName))
+        .catch((e) => setErr(String(e)))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, trialName])
   const res = trial ? trial.res : base
   async function showTrial(r: Result, name: string) {
     setTrial({ res: r, name })
@@ -116,7 +125,8 @@ function Episode({ id }: { id: string }) {
       </p>
       {trial && (
         <p className="trialbar">
-          Showing re-match with a runtime brand ({trial.name}). <button onClick={showBase}>Back to original catalogue</button>
+          Showing the re-match with {trial.res.trial_brand ?? 'a runtime brand'} added to the catalogue. Breaks it won are marked NEW BRAND.{' '}
+          <button onClick={showBase}>Back to original catalogue</button>
         </p>
       )}
       <Player ref={player} src={`/media/episodes/${id}.mp4`} slots={slots} duration={res.media.duration} sceneStarts={(res.scenes ?? []).slice(1).map((s) => s.start)} />
@@ -162,6 +172,7 @@ function Episode({ id }: { id: string }) {
             <div className="row">
               <b>{fmt(b.t)}</b>
               <span className="brand">{b.brand_name}</span>
+              {trial && b.placement.decision.brand_id === trial.res.trial_brand && <span className="newbrand">NEW BRAND</span>}
               <span className="muted">{b.creative?.id} · score {b.score.toFixed(2)} · fit {b.placement.decision.fit?.toFixed(2)}</span>
               <button onClick={() => player.current?.seek(Math.max(0, b.t - 6))}>Play 6s before</button>
             </div>
@@ -281,7 +292,7 @@ function Episode({ id }: { id: string }) {
         </table>
       </section>
 
-      <TryBrand id={id} onResult={showTrial} />
+      <TryBrand id={id} onResult={showTrial} onWatch={(t) => player.current?.seek(Math.max(0, t - 6))} />
 
       <section className="downloads">
         <a href={`/api/episodes/${id}/vmap.xml${trial ? `?trial=${trial.name}` : ''}`} target="_blank">VMAP manifest</a>

@@ -56,6 +56,37 @@ func main() {
 		log.Printf("vertex project: %s", p)
 	}
 	runner := jobs.NewRunner(jobs.NewBus(), func(ctx context.Context, j jobs.Job, progress func(stage, msg string)) (string, error) {
+		if j.Kind == "try-brand-all" {
+			var req struct {
+				Brand brands.Brand `json:"brand"`
+				Trial string       `json:"trial"`
+			}
+			if err := json.Unmarshal(j.Payload, &req); err != nil {
+				return "", err
+			}
+			list, err := lib.List()
+			if err != nil {
+				return "", err
+			}
+			all := append(append([]brands.Brand(nil), catalogue...), req.Brand)
+			d := factory.Deps(progress)
+			for i, s := range list {
+				video, err := lib.VideoPath(s.ID)
+				if err != nil {
+					continue
+				}
+				base, err := lib.Result(s.ID)
+				if err != nil {
+					continue
+				}
+				progress("brands", fmt.Sprintf("%d/%d %s: re-placing %d scheduled breaks with %s", i+1, len(list), s.ID, len(base.Breaks), req.Brand.ID))
+				ep := pipeline.Episode{ID: s.ID, Video: video, Dir: filepath.Join(cfg.DataDir, s.ID)}
+				if _, err := d.Rematch(ctx, ep, base, all, req.Trial, req.Brand.ID); err != nil {
+					return "", fmt.Errorf("%s: %w", s.ID, err)
+				}
+			}
+			return req.Trial, nil
+		}
 		video, err := lib.VideoPath(j.Episode)
 		if err != nil {
 			return "", err
@@ -79,7 +110,7 @@ func main() {
 				return "", err
 			}
 			progress("brands", fmt.Sprintf("re-placing %d scheduled breaks with %s added to %d brands", len(base.Breaks), req.Brand.ID, len(catalogue)))
-			_, err = d.Rematch(ctx, ep, base, append(append([]brands.Brand(nil), catalogue...), req.Brand), req.Trial)
+			_, err = d.Rematch(ctx, ep, base, append(append([]brands.Brand(nil), catalogue...), req.Brand), req.Trial, req.Brand.ID)
 			return req.Trial, err
 		default:
 			_, err = d.Run(ctx, ep, catalogue, cfg.PipelinePacing())
