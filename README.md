@@ -12,7 +12,7 @@ Finds where an ad can interrupt a story without cutting anyone off, decides whet
 ![Whisper](https://img.shields.io/badge/Whisper-large--v3-111111)
 ![Cloud Run](https://img.shields.io/badge/deployed-Cloud%20Run-4285F4?logo=googlecloud&logoColor=white)
 
-**[Live demo](https://adbreak-496040875664.us-central1.run.app)** ·
+**[Live demo: adbreak.aranyadutta.dev](https://adbreak.aranyadutta.dev)** ·
 [Architecture](docs/ARCHITECTURE.md) ·
 [Decision log](docs/LOG.jsonl) ·
 [Scope](docs/SCOPE.md)
@@ -324,7 +324,7 @@ Processing is never a synchronous request: uploads and re-matches return a job i
 
 ## Deployment
 
-The live demo runs on Google Cloud:
+The live demo runs on Google Cloud. `adbreak.aranyadutta.dev` is a Cloudflare 302 redirect (path and query preserved) to the Cloud Run URL `adbreak-496040875664.us-central1.run.app`; a redirect rather than a proxy, so uploads and long requests go straight to Cloud Run.
 
 ```mermaid
 flowchart LR
