@@ -19,7 +19,7 @@ import (
 const RejectNoBrand = "no eligible brand (all blocked or no fit)"
 
 // Version is stamped on every result so the UI can show which pipeline produced it.
-const Version = "0.2.0"
+const Version = "0.3.0"
 
 type Pacing struct {
 	MaxBreaksPerHour float64 `json:"max_breaks_per_hour"`
@@ -52,16 +52,17 @@ type Boundary struct {
 }
 
 type Funnel struct {
-	Shots          int `json:"shots"`
-	Scenes         int `json:"scenes"`
-	Candidates     int `json:"candidates"`
-	PassHardFilter int `json:"pass_hard_filters"`
-	PassAIJudge    int `json:"pass_ai_speech_check"`
-	CaughtByAudio  int `json:"caught_by_ai_audio_check"` // cleared by Whisper, rejected by the AI audio check
-	BreakBudget    int `json:"break_budget"`
-	Considered     int `json:"considered_for_placement"` // = placed + suppressed
-	Placed         int `json:"placed"`
-	Suppressed     int `json:"suppressed_for_brand_safety"` // no brand could take it (blocked or no fit)
+	Shots             int `json:"shots"`
+	Scenes            int `json:"scenes"`
+	Candidates        int `json:"candidates"`
+	PassHardFilter    int `json:"pass_hard_filters"`
+	PassAIJudge       int `json:"pass_ai_speech_check"`
+	CaughtByAudio     int `json:"caught_by_ai_audio_check"` // cleared by Whisper, rejected by the AI audio check
+	BreakBudget       int `json:"break_budget"`
+	Considered        int `json:"considered_for_placement"` // = placed + suppressed
+	Placed            int `json:"placed"`
+	Suppressed        int `json:"suppressed_for_brand_safety"`    // no brand could take it (blocked or no fit)
+	FinalCheckRejects int `json:"rejected_by_final_speech_check"` // selected, then failed the per-break speech re-check
 }
 
 type Break struct {
@@ -147,9 +148,26 @@ func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p P
 	// Placement-aware selection: a break no brand can take (all blocked, or no
 	// fit) is rejected with its reason and the DP re-runs, so the next-best break
 	// gets the slot. Bounded rounds keep the AI cost predictable.
-	const maxRounds = 4
+	const maxRounds = 8
 	for round := 0; round < maxRounds; round++ {
 		picked := breaks.Select(cands, breaks.Limits{MaxBreaks: budget, MinGap: sp.MinGap, MinScore: p.MinScore})
+		// Final speech check on each selected cut before anything is placed.
+		failed := 0
+		for _, i := range picked {
+			v, err := d.Verify(ctx, ep, cands[i].T)
+			if err != nil {
+				return Result{}, err
+			}
+			if !v.Clear {
+				cands[i].Rejected = RejectFinalCheck + ": " + v.Reason
+				r.Funnel.FinalCheckRejects++
+				failed++
+			}
+		}
+		if failed > 0 {
+			d.progress("select", "round %d: %d break(s) failed the final speech check, re-selecting", round+1, failed)
+			continue
+		}
 		var sel []breaks.Candidate
 		for _, i := range picked {
 			sel = append(sel, cands[i])
