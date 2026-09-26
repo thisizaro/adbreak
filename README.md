@@ -13,6 +13,7 @@ Finds where an ad can interrupt a story without cutting anyone off, decides whet
 ![Cloud Run](https://img.shields.io/badge/deployed-Cloud%20Run-4285F4?logo=googlecloud&logoColor=white)
 
 **[Live demo: adbreak.aranyadutta.dev](https://adbreak.aranyadutta.dev)** ·
+[Demo video](https://adbreakvideo.aranyadutta.dev) ·
 [Architecture](docs/ARCHITECTURE.md) ·
 [Decision log](docs/LOG.jsonl) ·
 [Scope](docs/SCOPE.md)
@@ -59,7 +60,9 @@ Give it an episode. It returns:
 | **Manifest** | An IAB VMAP 1.0 schedule with inline VAST 3.0, plus a debug JSON that explains every accept and every reject. |
 | **Player** | A web player that reads the VMAP, cuts to the ad at the break and resumes the episode where it left off. |
 
-Brands are loaded from the catalogue at runtime. A ninth brand can be added from the UI and matched against an episode without any code change.
+Brands are loaded from the catalogue at runtime. A ninth brand can be added from the UI and matched against one episode, or against every episode in a single job, without any code change. A re-match only asks the model about the new brand; every existing brand keeps its original judgement, so the comparison is fair. Each break then reports whether the new brand won, lost (with both fit scores), was blocked or was not a fit.
+
+Anyone can upload their own episode: the browser shows upload progress (percent, speed, time left) and then the live stage log, and an uploaded video can be deleted together with all its cached analysis. On the live service a 22 minute upload took about 6.5 minutes end to end.
 
 <table>
 <tr>
@@ -303,6 +306,7 @@ All configuration is environment variables.
 | `MAX_UPLOAD_MB`, `MAX_UPLOAD_SECONDS` | `700`, `3600` | Checked with ffprobe before any job starts |
 | `JOBS_PER_DAY` | `15` | Rolling 24 h cap; returns HTTP 429 when reached |
 | `JOB_TOKEN_CAP` | `1500000` | A job stops once its model calls pass this many tokens |
+| `SELF_URL` | | If set, the service requests its own URL every minute while a job runs, so Cloud Run does not scale it down mid-job after the browser tab closes |
 | `SLATE_FONT`, `PORT`, `APP_VERSION` | | |
 
 </details>
@@ -318,6 +322,9 @@ All configuration is environment variables.
 | `GET` | `/api/episodes/{id}/vmap.xml` | VMAP with inline VAST (`?trial=` for a try-a-brand result) |
 | `POST` | `/api/episodes/{id}/try-brand` | Queue a re-match with one extra brand (body: a catalogue entry) |
 | `GET` | `/api/episodes/{id}/trials/{name}` | Try-a-brand result |
+| `POST` | `/api/try-brand` | Queue one job that re-matches every episode with one extra brand |
+| `GET` | `/api/trials/{name}` | Per-break outcome of that brand across all episodes (won, lost, blocked, unfit) |
+| `DELETE` | `/api/episodes/{id}` | Delete an uploaded video and all its cached analysis (uploads only; samples return 403) |
 | `POST` | `/api/uploads` | Get an upload URL (this server locally, a Cloud Storage resumable session in production) |
 | `POST` | `/api/uploads/{id}/finalize` | Validate the uploaded file (audio track, size, duration) |
 | `POST` | `/api/jobs` | Start analysis of an uploaded episode; returns a job id immediately |
@@ -364,10 +371,10 @@ Measured cost: analysing all six episodes from scratch took roughly 1.3 million 
 ## Testing
 
 ```bash
-go test -race ./...   # 39 tests: speech guard, final speech check, pacing DP and scaling, negative-context
+go test -race ./...   # 40 tests: speech guard, final speech check, pacing DP and scaling, negative-context
                       # decision (missing answers, independent flags, dominant activity, a 9th brand),
                       # safety flags, VMAP/VAST well-formedness, Whisper chunk merge,
-                      # job runner and daily cap, HTTP routes, range clamping, upload flow
+                      # job runner and daily cap, HTTP routes, range clamping, upload flow, deleting uploads
 ```
 
 GitHub Actions runs `go vet`, `go test -race` (with ffmpeg installed) and the frontend build on every push and pull request. End-to-end behaviour (cut to the ad, resume, upload, try-a-brand) was verified in headless Chromium against the live deployment; the scripts are in `scripts/`.
@@ -381,11 +388,14 @@ Named honestly, with measurements where we have them.
 - **Long-form transcription can drop dialogue.** Whisper on 10-minute chunks returned nothing for 27 seconds of conversation in Mohanagar. The final per-break check catches this for every placed break, but the transcript itself still has the hole. Planned: re-transcribe long, loud gaps on short windows, which recovered that dialogue in testing. Short-window Whisper is not used as a gate because it hallucinates repeated words over music.
 - **Break counts are low by design.** One break per episode on five of six. Dialogue-dense episodes leave few speech-safe cuts; some sit next to content no brand may appear against, and some have no brand that fits what the scene is mainly about.
 - **Region.** The service runs in us-central1. For viewers in India, seeking takes 1 to 4 seconds; asia-south1 (Mumbai) is on the same pricing tier and would be closer.
+- **Jobs run one at a time.** While an uploaded episode is being analysed (about 6.5 minutes for 22 minutes of video), a brand test waits in the queue behind it.
 - **Single instance, in-memory job state.** Results survive restarts (they live in the bucket); queued jobs and the daily counter do not. An upload whose tab is closed can be stopped when the idle instance scales down.
 - **Video passes through the app.** Serving media from signed Cloud Storage URLs or a CDN would make seeking faster.
 - **VMAP is validated for structure** (well-formed, IAB namespaces and required elements, consumed by our own player), not against a third-party ad server.
 
 ## Roadmap
+
+- **More breaks where the story allows them.** Measured tonight: the first speech filter uses Whisper segment spans, which stretch through pauses and music, and discards 70 to 90% of real pauses before any AI sees them (Mohanagar keeps 24 cuts; word-level timing would keep 83). The planned change: filter on word timings only, replace the batched audio check with the focused one-cut-per-call question that proved reliable, keep the two-model final check, and raise the ceiling to 8 breaks per hour with a gap of max(3 min, 15% of runtime). That allows up to 3 breaks in a 25 minute episode without loosening speech or brand safety.
 
 - Move to asia-south1 and serve media from signed URLs or Cloud CDN, with HLS for adaptive streaming.
 - Durable jobs: a queue plus a job store, so jobs survive instance restarts and several instances can work at once.
