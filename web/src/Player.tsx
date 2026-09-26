@@ -48,10 +48,21 @@ const Player = forwardRef<PlayerHandle, Props>(function Player({ src, slots, dur
     return () => v.removeEventListener('timeupdate', onTime)
   }, [slots, active])
 
+  // Preload the next ad creative so the cut is instant instead of waiting on the network.
+  useEffect(() => {
+    const a = ad.current
+    if (active || !a) return
+    const next = slots.find((s) => !played.current.has(s.breakId) && s.offset > now) ?? slots[0]
+    if (next && a.getAttribute('src') !== next.media) {
+      a.preload = 'auto'
+      a.src = next.media
+    }
+  }, [slots, now, active])
+
   useEffect(() => {
     const a = ad.current
     if (!active || !a) return
-    a.src = active.media
+    if (a.getAttribute('src') !== active.media) a.src = active.media
     a.currentTime = 0
     a.play().catch(() => {})
     const tick = () => setAdLeft(Math.max(0, Math.ceil(active.duration - a.currentTime)))

@@ -138,16 +138,16 @@ sequenceDiagram
   J->>G: VMAP, VAST, debug JSON, slates
 ```
 
-## 5. Deployment (planned)
+## 5. Deployment (live: https://adbreak-496040875664.us-central1.run.app)
 
 Decided: Cloud Run + GCS, one instance, budget alerts; Postgres pending decision (LOG 13:35, 16:34). Gemini through Vertex AI because the trial credit excludes AI Studio (LOG 16:34).
-Deploy is deferred until Aranya is back (LOG 14:18).
+Deployed 18:38 (LOG). The bucket is mounted into the container (Cloud Storage volume), so the code keeps using file paths.
 
 ```mermaid
 flowchart LR
-  U[judge browser] -->|https *.run.app| CR["Cloud Run service<br/>max instances 1<br/>debian-slim + ffmpeg + fonts"]
-  CR --> GCS[(GCS bucket<br/>videos, slates, manifests)]
-  U -->|signed URLs: upload + playback| GCS
+  U[judge browser] -->|https *.run.app: app, API, video in 16 MiB chunks| CR["Cloud Run service adbreak<br/>us-central1, 2 vCPU / 4 GiB, min 0 max 1<br/>debian trixie-slim + ffmpeg + fonts<br/>service account adbreak-run"]
+  CR -->|volume mount /mnt/media| GCS[(bucket hoichoi-adbreak-media<br/>videos/, data/ results + caches, slates)]
+  U -->|upload: resumable session URL, CORS for the run.app origin| GCS
   CR --> GROQ[Groq Whisper API]
   CR --> GEM["Vertex AI / Agent Platform: Gemini generateContent<br/>(service account, trial credit)"]
 ```
