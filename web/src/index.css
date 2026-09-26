@@ -86,3 +86,6 @@ tr.rej { color: var(--muted); }
 .danger { margin-top: 28px; border: 1px solid #5a2a22; border-radius: 10px; padding: 12px 16px; }
 .danger h3 { margin-top: 4px; }
 .danger-btn { background: #7a1f16; }
+.cardwrap { position: relative; display: flex; }
+.cardwrap .card { flex: 1; }
+.card-del { position: absolute; top: 12px; right: 12px; background: #7a1f16; padding: 3px 10px; font-size: 13px; }
