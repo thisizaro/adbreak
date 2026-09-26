@@ -56,3 +56,6 @@ tr.rej { color: var(--muted); }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: -1px; }
 .lg-scene { background: #6d7a96; }
 .lg-break { background: var(--accent); }
+.pacing { display: flex; flex-wrap: wrap; gap: 8px; }
+.pacing div { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; min-width: 120px; }
+.pacing span { color: var(--muted); font-size: 12px; }

@@ -34,9 +34,14 @@ export default function App() {
 
 function Library({ open }: { open: (id: string) => void }) {
   const [eps, setEps] = useState<Summary[] | null>(null)
+  const [pacing, setPacing] = useState<Record<string, number> | null>(null)
   const [err, setErr] = useState('')
   useEffect(() => {
     listEpisodes().then(setEps).catch((e) => setErr(String(e)))
+    fetch('/api/config')
+      .then((r) => r.json())
+      .then((c) => setPacing(c.pacing))
+      .catch(() => {})
   }, [])
   if (err) return <p className="err">{err}</p>
   if (!eps) return <p>Loading…</p>
@@ -55,6 +60,19 @@ function Library({ open }: { open: (id: string) => void }) {
           </button>
         ))}
       </div>
+      {pacing && (
+        <section>
+          <h3>Pacing rules (config, enforced in code)</h3>
+          <div className="pacing">
+            {Object.entries(pacing).map(([k, v]) => (
+              <div key={k}>
+                <b>{v}</b>
+                <span>{k.replaceAll('_', ' ')}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   )
 }
