@@ -22,7 +22,8 @@ flowchart LR
     blob["blob<br/>local disk | GCS (planned; local disk today)"]
     media["media<br/>ffprobe, shots, audio chunks, frames, clips"]
     speech["speech<br/>ASR provider: groq-whisper"]
-    ai["ai<br/>LLM/VLM provider: gemini"]
+    app["app<br/>builds per-job deps from config"]
+    ai["ai<br/>Gemini via Vertex AI (ADC) or AI Studio key<br/>per-job token budget"]
     scenes["scenes<br/>histograms, proposals, scene build"]
     breaks["breaks<br/>hard filters, scene-context score, pacing DP"]
     brands["brands<br/>catalogue, hard negative block"]
@@ -34,7 +35,8 @@ flowchart LR
   server --> manifest
   library --> slates
   server --> jobs
-  jobs --> pipeline
+  jobs --> app
+  app --> pipeline
   pipeline --> media & speech & scenes & breaks & brands
   pipeline --> ai
   jobs -.-> store
@@ -131,17 +133,16 @@ sequenceDiagram
 
 ## 5. Deployment (planned)
 
-Decided: Cloud Run + GCS + Neon Postgres, one instance, Rs 300 budget alert (LOG 13:35).
+Decided: Cloud Run + GCS, one instance, budget alerts; Postgres pending decision (LOG 13:35, 16:34). Gemini through Vertex AI because the trial credit excludes AI Studio (LOG 16:34).
 Deploy is deferred until Aranya is back (LOG 14:18).
 
 ```mermaid
 flowchart LR
   U[judge browser] -->|https *.run.app| CR["Cloud Run service<br/>max instances 1<br/>debian-slim + ffmpeg + fonts"]
-  CR --> NEON[(Neon Postgres)]
   CR --> GCS[(GCS bucket<br/>videos, slates, manifests)]
   U -->|signed URLs: upload + playback| GCS
   CR --> GROQ[Groq Whisper API]
-  CR --> GEM[Gemini API]
+  CR --> GEM["Vertex AI / Agent Platform: Gemini generateContent<br/>(service account, trial credit)"]
 ```
 
 Local dev mirrors this with Postgres in Docker, local disk instead of GCS, static ffmpeg (LOG 14:15).

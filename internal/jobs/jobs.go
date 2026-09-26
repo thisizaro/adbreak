@@ -6,6 +6,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -75,12 +76,19 @@ type Runner struct {
 	mu   sync.Mutex
 	jobs map[string]*Job
 	seq  int
+	// PerDay caps jobs accepted in any rolling 24h window (0 = no cap). Counted
+	// in memory, so a restart resets it; the Cloud Run instance is long-lived enough.
+	PerDay int
+	now    func() time.Time
 }
+
+// ErrDailyCap is returned when the rolling 24h job cap is reached.
+var ErrDailyCap = errors.New("daily job limit reached, try again tomorrow")
 
 const TopicCreated = "job.created"
 
 func NewRunner(bus *Bus, run RunFunc) *Runner {
-	return &Runner{bus: bus, run: run, jobs: map[string]*Job{}}
+	return &Runner{bus: bus, run: run, jobs: map[string]*Job{}, now: time.Now}
 }
 
 // Start consumes job.created events on one worker until ctx ends.
@@ -100,8 +108,20 @@ func (r *Runner) Start(ctx context.Context, queueSize int) {
 
 func (r *Runner) Submit(episode string) (Job, error) {
 	r.mu.Lock()
+	if r.PerDay > 0 {
+		n := 0
+		for _, j := range r.jobs {
+			if r.now().Sub(j.Created) < 24*time.Hour {
+				n++
+			}
+		}
+		if n >= r.PerDay {
+			r.mu.Unlock()
+			return Job{}, ErrDailyCap
+		}
+	}
 	r.seq++
-	j := &Job{ID: fmt.Sprintf("job-%d-%d", time.Now().Unix(), r.seq), Episode: episode, Status: Queued, Created: time.Now().UTC()}
+	j := &Job{ID: fmt.Sprintf("job-%d-%d", time.Now().Unix(), r.seq), Episode: episode, Status: Queued, Created: r.now().UTC()}
 	r.jobs[j.ID] = j
 	snap := *j
 	r.mu.Unlock()

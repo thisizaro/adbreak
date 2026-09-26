@@ -11,14 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/thisizaro/adbreak/internal/ai"
+	"github.com/thisizaro/adbreak/internal/app"
 	"github.com/thisizaro/adbreak/internal/brands"
 	"github.com/thisizaro/adbreak/internal/config"
 	"github.com/thisizaro/adbreak/internal/jobs"
 	"github.com/thisizaro/adbreak/internal/library"
 	"github.com/thisizaro/adbreak/internal/pipeline"
 	"github.com/thisizaro/adbreak/internal/server"
-	"github.com/thisizaro/adbreak/internal/speech"
 	"github.com/thisizaro/adbreak/web"
 )
 
@@ -45,13 +44,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	deps := pipeline.Deps{
-		ASR:            &speech.Groq{BaseURL: cfg.GroqURL, APIKey: cfg.GroqKey, Model: cfg.ASRModel, Language: "bn"},
-		AI:             &ai.Gemini{BaseURL: cfg.GeminiURL, APIKey: cfg.GeminiKey, Model: cfg.GeminiModel},
-		ShotThreshold:  0.3,
-		ChunkSeconds:   600,
-		OverlapSeconds: 5,
-		ASRParallelism: 3,
+	factory, err := app.NewFactory(ctx, cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if p := factory.Project(); p != "" {
+		log.Printf("vertex project: %s", p)
 	}
 	runner := jobs.NewRunner(jobs.NewBus(), func(ctx context.Context, id string, progress func(stage, msg string)) error {
 		video, err := lib.VideoPath(id)
@@ -62,11 +60,10 @@ func main() {
 		if err := os.MkdirAll(ep.Dir, 0o755); err != nil {
 			return err
 		}
-		d := deps
-		d.Progress = progress
-		_, err = d.Run(ctx, ep, catalogue, cfg.PipelinePacing())
+		_, err = factory.Deps(progress).Run(ctx, ep, catalogue, cfg.PipelinePacing())
 		return err
 	})
+	runner.PerDay = cfg.JobsPerDay
 	runner.Start(ctx, 8)
 
 	handler := server.New(cfg.Version, static, lib, cfg.PipelinePacing()).WithUploads(&server.Uploads{

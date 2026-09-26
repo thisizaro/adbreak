@@ -120,8 +120,12 @@ func (d Deps) Place(ctx context.Context, ep Episode, t float64, catalogue []bran
 			}
 			parts = append(parts, ai.Text(fmt.Sprintf("Frame %s the break (%+.0fs):", label, off)), ai.Blob("image/jpeg", b))
 		}
+		model := d.Decide
+		if model == nil {
+			model = d.AI
+		}
 		var p Placement
-		if err := d.AI.JSON(ctx, parts, placeSchema, &p); err != nil {
+		if err := model.JSON(ctx, parts, placeSchema, &p); err != nil {
 			return Placement{}, err
 		}
 		p.T = t

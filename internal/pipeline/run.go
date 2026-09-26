@@ -61,6 +61,7 @@ type Result struct {
 	Candidates  []breaks.Candidate `json:"candidates"`
 	ASRProvider string             `json:"asr_provider"`
 	AIProvider  string             `json:"ai_provider"`
+	DecideModel string             `json:"decide_provider,omitempty"`
 }
 
 func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p Pacing) (Result, error) {
@@ -74,6 +75,9 @@ func (d Deps) Run(ctx context.Context, ep Episode, catalogue []brands.Brand, p P
 	}
 	r := Result{Episode: ep.ID, Version: Version, ComputedAt: time.Now().UTC(), Media: m.Info, Pacing: p,
 		ASRProvider: d.ASR.Name(), AIProvider: d.AI.Name()}
+	if d.Decide != nil {
+		r.DecideModel = d.Decide.Name()
+	}
 	r.Funnel.Shots = len(m.Shots) + 1
 	sc, err := d.Scenes(ctx, ep, m, tr)
 	if err != nil {

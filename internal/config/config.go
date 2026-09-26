@@ -5,6 +5,7 @@ package config
 import (
 	"fmt"
 
+	"github.com/thisizaro/adbreak/internal/ai"
 	"github.com/thisizaro/adbreak/internal/pipeline"
 
 	"io"
@@ -32,6 +33,12 @@ type Config struct {
 	GeminiKey   string
 	GeminiURL   string
 	GeminiModel string
+	DecideModel string
+	AIBackend   string
+	GCPProject  string
+	VertexLoc   string
+	JobTokens   int64
+	JobsPerDay  int
 	GroqKey     string
 	GroqURL     string
 	ASRModel    string
@@ -53,7 +60,13 @@ func Load() (Config, error) {
 		GCSBucket:   str("GCS_BUCKET", ""),
 		GeminiKey:   str("GEMINI_API_KEY", ""),
 		GeminiURL:   str("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"),
-		GeminiModel: str("GEMINI_MODEL", "gemini-2.5-flash"),
+		GeminiModel: str("GEMINI_MODEL", "gemini-3.1-flash-lite"),
+		DecideModel: str("GEMINI_DECIDE_MODEL", "gemini-3.8-flash"),
+		AIBackend:   str("AI_BACKEND", "vertex"),
+		GCPProject:  str("GCP_PROJECT", ""),
+		VertexLoc:   str("VERTEX_LOCATION", "global"),
+		JobTokens:   int64(integer("JOB_TOKEN_CAP", 1500000, &errs)),
+		JobsPerDay:  integer("JOBS_PER_DAY", 30, &errs),
 		GroqKey:     str("GROQ_API_KEY", ""),
 		GroqURL:     str("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
 		ASRModel:    str("ASR_MODEL", "whisper-large-v3"),
@@ -74,10 +87,19 @@ func Load() (Config, error) {
 			MinScore:         float("PACING_MIN_SCORE", 0.35, &errs),
 		},
 	}
+	if c.AIBackend != "vertex" && c.AIBackend != "studio" {
+		errs = append(errs, fmt.Errorf("AI_BACKEND=%q: want vertex or studio", c.AIBackend))
+	}
 	if len(errs) > 0 {
 		return c, fmt.Errorf("config: %v", errs)
 	}
 	return c, nil
+}
+
+// AISettings is the model backend configuration.
+func (c Config) AISettings() ai.Settings {
+	return ai.Settings{Backend: c.AIBackend, Project: c.GCPProject, Location: c.VertexLoc,
+		APIKey: c.GeminiKey, BaseURL: c.GeminiURL, TokenBudget: c.JobTokens}
 }
 
 // PipelinePacing converts pacing to the plain seconds form the pipeline and UI use.
@@ -96,8 +118,9 @@ func (c Config) Print(w io.Writer) {
 	fmt.Fprintf(w, "  port=%s version=%s\n", c.Port, c.Version)
 	fmt.Fprintf(w, "  database_url=%s gcs_bucket=%q\n", secret(c.DatabaseURL), c.GCSBucket)
 	fmt.Fprintf(w, "  data_dir=%s video_dir=%s brands=%s slate_font=%s\n", c.DataDir, c.VideoDir, c.BrandsPath, c.SlateFont)
-	fmt.Fprintf(w, "  budget guard: max_upload_mb=%d max_upload_seconds=%.0f one job at a time\n", c.MaxUploadMB, c.MaxUploadS)
-	fmt.Fprintf(w, "  gemini_api_key=%s gemini_model=%s gemini_url=%s\n", secret(c.GeminiKey), c.GeminiModel, c.GeminiURL)
+	fmt.Fprintf(w, "  budget guard: max_upload_mb=%d max_upload_seconds=%.0f jobs_per_day=%d job_token_cap=%d one job at a time\n", c.MaxUploadMB, c.MaxUploadS, c.JobsPerDay, c.JobTokens)
+	fmt.Fprintf(w, "  ai_backend=%s gcp_project=%q vertex_location=%s gemini_api_key=%s\n", c.AIBackend, c.GCPProject, c.VertexLoc, secret(c.GeminiKey))
+	fmt.Fprintf(w, "  models: bulk=%s decide=%s\n", c.GeminiModel, c.DecideModel)
 	fmt.Fprintf(w, "  groq_api_key=%s asr_model=%s groq_url=%s\n", secret(c.GroqKey), c.ASRModel, c.GroqURL)
 	p := c.Pacing
 	fmt.Fprintf(w, "  pacing: max_breaks_per_hour=%d min_gap=%s max_ad_load_pct=%.1f head_margin=%s tail_margin=%s speech_margin=%s pod_seconds=%.0f min_score=%.2f\n",
