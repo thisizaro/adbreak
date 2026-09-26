@@ -31,7 +31,6 @@ type Pacing struct {
 type Config struct {
 	Port        string
 	Version     string
-	DatabaseURL string
 	GCSBucket   string
 	GeminiKey   string
 	GeminiURL   string
@@ -62,7 +61,6 @@ func Load() (Config, error) {
 	c := Config{
 		Port:        str("PORT", "8080"),
 		Version:     str("APP_VERSION", "dev"),
-		DatabaseURL: str("DATABASE_URL", ""),
 		GCSBucket:   str("GCS_BUCKET", ""),
 		GeminiKey:   str("GEMINI_API_KEY", ""),
 		GeminiURL:   str("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"),

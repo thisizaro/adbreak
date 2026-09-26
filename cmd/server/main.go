@@ -78,7 +78,7 @@ func main() {
 			if err != nil {
 				return "", err
 			}
-			progress("brands", fmt.Sprintf("re-placing %d breaks with %s added to %d brands", len(base.Breaks)+len(base.Unplaced), req.Brand.ID, len(catalogue)))
+			progress("brands", fmt.Sprintf("re-placing %d scheduled breaks with %s added to %d brands", len(base.Breaks), req.Brand.ID, len(catalogue)))
 			_, err = d.Rematch(ctx, ep, base, append(append([]brands.Brand(nil), catalogue...), req.Brand), req.Trial)
 			return req.Trial, err
 		default:
