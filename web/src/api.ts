@@ -18,6 +18,9 @@ export type Summary = {
   pipeline_version: string
   computed_at: string
   funnel: Funnel
+  break_times: number[]
+  suppressed_times: number[]
+  brands: string[]
 }
 
 export type SceneRead = { description: string; dominant_activity: string; contexts: string[] }
@@ -123,4 +126,9 @@ export function fmt(sec: number): string {
   const m = Math.floor(sec / 60)
   const s = Math.floor(sec % 60)
   return `${m}:${String(s).padStart(2, '0')}`
+}
+
+export function title(id: string): string {
+  if (id.startsWith('up_')) return 'Uploaded video'
+  return id.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }

@@ -38,7 +38,7 @@ func TestRoutes(t *testing.T) {
 	}{
 		{"/api/health", `"status":"ok"`, 200},
 		{"/api/missing", `"error":"not found"`, 404},
-		{"/api/episodes", `"id":"ep1"`, 200},
+		{"/api/episodes", `"break_times":[917]`, 200},
 		{"/api/episodes/ep1", `"pipeline_version":"t"`, 200},
 		{"/api/episodes/nope", `not found`, 404},
 		{"/api/episodes/ep1/vmap.xml", `timeOffset="00:15:17.000"`, 200},
