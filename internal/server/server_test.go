@@ -42,7 +42,7 @@ func TestRoutes(t *testing.T) {
 		{"/api/episodes/ep1", `"pipeline_version":"t"`, 200},
 		{"/api/episodes/nope", `not found`, 404},
 		{"/api/episodes/ep1/vmap.xml", `timeOffset="00:15:17.000"`, 200},
-		{"/media/episodes/ep1.mp4", "0123456789", 200},
+		{"/media/episodes/ep1.mp4", "0123456789", 206},
 		{"/media/episodes/..%2fx.mp4", "not found", 404},
 		{"/media/slates/unknown.mp4", "not found", 404},
 		{"/", "spa", 200},

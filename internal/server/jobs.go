@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 // start a job). Locally the URL is this server; in production the blob seam
 // hands out a GCS signed URL instead, because Cloud Run caps request bodies at 32 MiB.
 type Uploads struct {
+	Target      UploadTarget
 	VideoDir    string
 	MaxBytes    int64
 	MaxDuration float64
@@ -27,13 +29,55 @@ type Uploads struct {
 var uploadID = regexp.MustCompile(`^up_[0-9]+$`)
 
 func (s *Server) createUpload(w http.ResponseWriter, r *http.Request) {
+	if s.up == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "uploads disabled"})
+		return
+	}
 	id := fmt.Sprintf("up_%d", time.Now().UnixNano())
-	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "upload_url": "/api/uploads/" + id})
+	target, err := s.up.Target.Begin(r.Context(), id, baseURL(r))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "upload_url": target})
+}
+
+// finalizeUpload validates an uploaded file wherever it was PUT (this server or GCS).
+func (s *Server) finalizeUpload(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !uploadID.MatchString(id) || s.up == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	path := filepath.Join(s.up.VideoDir, id+".mp4")
+	st, err := os.Stat(path)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "upload not found"})
+		return
+	}
+	reject := func(msg string) {
+		os.Remove(path)
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": msg})
+	}
+	if st.Size() > s.up.MaxBytes {
+		reject(fmt.Sprintf("file is %d MB, limit is %d MB", st.Size()>>20, s.up.MaxBytes>>20))
+		return
+	}
+	info, err := media.Probe(r.Context(), path)
+	if err != nil || !info.HasAudio {
+		reject("not a video with an audio track")
+		return
+	}
+	if info.Duration > s.up.MaxDuration {
+		reject(fmt.Sprintf("video is %.0fs, limit is %.0fs", info.Duration, s.up.MaxDuration))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "bytes": st.Size(), "duration": info.Duration})
 }
 
 func (s *Server) putUpload(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if !uploadID.MatchString(id) || s.up == nil {
+	if _, local := s.up.Target.(LocalTarget); !uploadID.MatchString(id) || s.up == nil || !local {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 		return
 	}
@@ -51,22 +95,11 @@ func (s *Server) putUpload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": fmt.Sprintf("upload failed after %d bytes: %v", n, err)})
 		return
 	}
-	info, err := media.Probe(r.Context(), tmp)
-	if err != nil || !info.HasAudio {
-		os.Remove(tmp)
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "not a video with an audio track"})
-		return
-	}
-	if info.Duration > s.up.MaxDuration {
-		os.Remove(tmp)
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": fmt.Sprintf("video is %.0fs, limit is %.0fs", info.Duration, s.up.MaxDuration)})
-		return
-	}
 	if err := os.Rename(tmp, dst); err != nil {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "bytes": n, "duration": info.Duration})
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "bytes": n})
 }
 
 func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
@@ -82,6 +115,10 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	j, err := s.up.Runner.Submit(req.Episode)
+	if errors.Is(err, jobs.ErrDailyCap) {
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": err.Error()})
+		return
+	}
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 		return

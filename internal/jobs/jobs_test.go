@@ -67,3 +67,19 @@ func TestSubmitFailsWhenQueueFull(t *testing.T) {
 		t.Fatal("expected queue full error")
 	}
 }
+
+func TestDailyCap(t *testing.T) {
+	r := NewRunner(NewBus(), func(context.Context, string, func(string, string)) error { return nil })
+	r.PerDay = 2
+	now := time.Now()
+	r.now = func() time.Time { return now }
+	r.Submit("a")
+	r.Submit("b")
+	if _, err := r.Submit("c"); !errors.Is(err, ErrDailyCap) {
+		t.Fatalf("want ErrDailyCap, got %v", err)
+	}
+	now = now.Add(25 * time.Hour)
+	if _, err := r.Submit("d"); err != nil {
+		t.Fatalf("cap should roll over after 24h: %v", err)
+	}
+}

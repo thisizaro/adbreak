@@ -22,6 +22,7 @@ import (
 type Deps struct {
 	ASR            speech.Provider
 	AI             ai.Provider
+	Decide         ai.Provider // placement model; falls back to AI
 	ShotThreshold  float64
 	ChunkSeconds   float64
 	OverlapSeconds float64

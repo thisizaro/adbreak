@@ -11,10 +11,10 @@ import (
 	"strings"
 
 	"github.com/thisizaro/adbreak/internal/ai"
+	"github.com/thisizaro/adbreak/internal/app"
 	"github.com/thisizaro/adbreak/internal/brands"
 	"github.com/thisizaro/adbreak/internal/config"
 	"github.com/thisizaro/adbreak/internal/pipeline"
-	"github.com/thisizaro/adbreak/internal/speech"
 )
 
 func main() {
@@ -34,24 +34,23 @@ func main() {
 	if err := os.MkdirAll(ep.Dir, 0o755); err != nil {
 		log.Fatal(err)
 	}
-	d := pipeline.Deps{
-		ASR:            &speech.Groq{BaseURL: cfg.GroqURL, APIKey: cfg.GroqKey, Model: cfg.ASRModel, Language: "bn"},
-		ShotThreshold:  0.3,
-		ChunkSeconds:   600,
-		OverlapSeconds: 5,
-		ASRParallelism: 3,
+	ctx := context.Background()
+	factory, err := app.NewFactory(ctx, cfg)
+	if err != nil {
+		log.Fatal(err)
 	}
+	d := factory.Deps(nil)
 	catalogue, err := brands.Load(*catalogueFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
-	gem := &ai.Gemini{BaseURL: cfg.GeminiURL, APIKey: cfg.GeminiKey, Model: cfg.GeminiModel}
-	d.AI = gem
-	res, err := d.Run(context.Background(), ep, catalogue, cfg.PipelinePacing())
+	res, err := d.Run(ctx, ep, catalogue, cfg.PipelinePacing())
 	if err != nil {
 		log.Fatal(err)
 	}
-	calls, tokens := gem.Usage()
+	calls, tokens := d.AI.(*ai.Gemini).Usage()
+	dc, dt := d.Decide.(*ai.Gemini).Usage()
+	calls, tokens = calls+dc, tokens+dt
 	log.Printf("funnel %+v", res.Funnel)
 	for _, b := range res.Breaks {
 		log.Printf("break t=%.2f score=%.2f brand=%s creative=%s", b.T, b.Score, b.Placement.Decision.BrandID, b.Placement.Decision.CreativeID)
