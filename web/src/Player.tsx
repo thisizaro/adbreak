@@ -1,14 +1,13 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { fmt, type AdSlot } from './api'
-import Strip from './Strip'
 
 export type PlayerHandle = { seek: (t: number) => void }
 
-type Props = { src: string; slots: AdSlot[]; duration: number; sceneStarts: number[]; suppressed: number[] }
+type Props = { src: string; slots: AdSlot[]; duration: number; sceneStarts: number[] }
 
 // Plays the episode and, when playback crosses a VMAP break, pauses content,
 // plays the ad creative, then resumes content at the break point.
-const Player = forwardRef<PlayerHandle, Props>(function Player({ src, slots, duration, sceneStarts, suppressed }, ref) {
+const Player = forwardRef<PlayerHandle, Props>(function Player({ src, slots, duration, sceneStarts }, ref) {
   const content = useRef<HTMLVideoElement>(null)
   const ad = useRef<HTMLVideoElement>(null)
   const played = useRef<Set<string>>(new Set())
@@ -86,8 +85,7 @@ const Player = forwardRef<PlayerHandle, Props>(function Player({ src, slots, dur
         <video ref={ad} className={active ? 'ad on' : 'ad'} playsInline />
         {active && (
           <div className="adbadge">
-            <span className="onair-dot" aria-hidden="true" />
-            Ad break: {active.title}, {adLeft}s left. The episode resumes at {fmt(active.offset)}.
+            Ad: {active.title} · {adLeft}s · resumes at {fmt(active.offset)}
             <button
               className="skip"
               onClick={() => {
@@ -102,21 +100,25 @@ const Player = forwardRef<PlayerHandle, Props>(function Player({ src, slots, dur
       </div>
       <div className="track">
         <div className="progress" style={{ width: `${(now / duration) * 100}%` }} />
-        <Strip
-          size="full"
-          duration={duration}
-          scenes={sceneStarts}
-          suppressed={suppressed}
-          breaks={slots.map((s) => s.offset)}
-          onPick={(t) => {
-            for (const x of slots) if (x.offset >= t) played.current.delete(x.breakId)
-            lastT.current = Math.max(0, t - 6)
-            if (content.current) {
-              content.current.currentTime = lastT.current
-              content.current.play().catch(() => {})
-            }
-          }}
-        />
+        {sceneStarts.map((t) => (
+          <div key={t} className="scenetick" style={{ left: `${(t / duration) * 100}%` }} />
+        ))}
+        {slots.map((s) => (
+          <div
+            key={s.breakId}
+            className="marker"
+            style={{ left: `${(s.offset / duration) * 100}%` }}
+            title={`${s.title} at ${fmt(s.offset)}: click to watch from 6s before`}
+            onClick={() => {
+              for (const x of slots) if (x.offset >= s.offset) played.current.delete(x.breakId)
+              lastT.current = Math.max(0, s.offset - 6)
+              if (content.current) {
+                content.current.currentTime = lastT.current
+                content.current.play().catch(() => {})
+              }
+            }}
+          />
+        ))}
       </div>
     </div>
   )

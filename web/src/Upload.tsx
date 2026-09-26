@@ -10,10 +10,10 @@ export default function Upload({ done }: { done: (episode: string) => void }) {
   async function send(file: File) {
     try {
       setJob(null)
-      if (file.size > 700 * 1024 * 1024) throw new Error(`This file is ${Math.round(file.size / 1048576)} MB. The limit is 700 MB.`)
+      if (file.size > 700 * 1024 * 1024) throw new Error(`file is ${Math.round(file.size / 1048576)} MB, limit is 700 MB`)
       setMsg('reading the video…')
       const secs = await localDuration(file)
-      if (secs > 3600) throw new Error(`This video is ${Math.round(secs / 60)} minutes long. The limit is 60 minutes.`)
+      if (secs > 3600) throw new Error(`video is ${Math.round(secs / 60)} minutes long, limit is 60 minutes`)
       setMsg('requesting upload URL…')
       const ur = await fetch('/api/uploads', { method: 'POST', body: JSON.stringify({ size: file.size }) })
       const up = await ur.json()
@@ -48,8 +48,8 @@ export default function Upload({ done }: { done: (episode: string) => void }) {
 
   return (
     <section className="upload">
-      <h2>Analyse your own video</h2>
-      <p className="note">MP4 up to 60 minutes and 700 MB; H.264 plays in every browser. A 25 minute episode takes a few minutes to analyse. Keep this page open to watch the steps.</p>
+      <h3>Analyse a new video</h3>
+      <p className="muted">MP4 up to 60 minutes and 700 MB. H.264 video plays in every browser. Processing a 25 minute episode takes a few minutes; you can leave this page open.</p>
       <input type="file" accept="video/mp4" onChange={(e) => e.target.files?.[0] && send(e.target.files[0])} />
       {msg && <p className="muted">{msg}</p>}
       {job && (
