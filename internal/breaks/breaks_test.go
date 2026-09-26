@@ -49,10 +49,10 @@ func TestMaxBreaks(t *testing.T) {
 		dur, perHour, load, pod float64
 		want                    int
 	}{
-		{1227, 6, 15, 30, 2},   // 20.5 min at 6/h -> 2
-		{2349, 6, 15, 30, 3},   // 39 min -> 3
-		{1227, 6, 2.5, 30, 1},  // ad load caps it: 1 pod of 30s in 20.5 min is 2.4%
-		{300, 6, 15, 30, 0},    // too short for a break at 6/h
+		{1227, 6, 15, 30, 2},  // 20.5 min at 6/h -> 2
+		{2349, 6, 15, 30, 3},  // 39 min -> 3
+		{1227, 6, 2.5, 30, 1}, // ad load caps it: 1 pod of 30s in 20.5 min is 2.4%
+		{300, 6, 15, 30, 0},   // too short for a break at 6/h
 	}
 	for _, c := range cases {
 		if got := MaxBreaks(c.dur, c.perHour, c.load, c.pod); got != c.want {
