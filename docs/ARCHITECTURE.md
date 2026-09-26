@@ -118,7 +118,7 @@ sequenceDiagram
   A-->>B: upload URL + video id
   B->>G: PUT video bytes
   B->>A: POST /api/jobs {video id}
-  A->>D: insert job (queued) (today: in-memory map; Postgres planned)
+  A->>D: insert job (queued) (today: in-memory map, Postgres planned)
   A-->>B: job id (immediately)
   A->>J: event job.created
   loop each stage
